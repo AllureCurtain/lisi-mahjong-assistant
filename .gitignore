@@ -5,3 +5,4 @@ coverage/
 *.tsbuildinfo
 *.local
 package-lock.json
+vite-dev*.log
