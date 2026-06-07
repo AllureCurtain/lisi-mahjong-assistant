@@ -16,6 +16,7 @@ import {
   type TileCounts,
 } from '../domain';
 import { canDeclareListeningByStandingDiscard, normalDiscardCandidates } from '../rules/lisiRules';
+import { settleHand } from '../scoring/scoring';
 
 export type GameAction =
   | { type: 'visible-discard'; tile: Tile }
@@ -26,7 +27,13 @@ export type GameAction =
   | { type: 'added-kong'; caller: Seat; tile: Tile }
   | { type: 'declare-listening'; seat: Seat; faceDownTile: Tile }
   | { type: 'user-draw'; tile: Tile }
-  | { type: 'win'; winner: Seat };
+  | {
+      type: 'win';
+      winner: Seat;
+      winType?: 'self-draw' | 'discard';
+      discarder?: Seat;
+      discarderHadDeclaredListening?: boolean;
+    };
 
 function meldTileCopies(type: MeldType): number {
   return type === 'pong' ? 3 : 4;
@@ -359,7 +366,34 @@ export function applyAction(game: GameState, action: GameAction): GameState {
       if (!winner.hasDeclaredListening) {
         throw new Error('Cannot win before listening.');
       }
-      return finalizeState({ ...withHistory, currentActor: action.winner, phase: 'settlement' });
+      const winType = action.winType ?? 'discard';
+      if (winType === 'discard' && !action.discarder) {
+        throw new Error('Discard win requires a discarder.');
+      }
+      const discarderHadDeclaredListening =
+        action.discarderHadDeclaredListening ??
+        (action.discarder ? getPlayer(withHistory, action.discarder).hasDeclaredListening : false);
+      const scoreDelta = settleHand({
+        seats: SEATS,
+        dealer: withHistory.players.find((player) => player.isDealer)?.seat ?? 'A',
+        winner: action.winner,
+        winType,
+        discarder: action.discarder,
+        discarderHadDeclaredListening,
+        winnerExposedKongs: winner.exposedKongCount,
+        winnerConcealedKongs: winner.concealedKongCount,
+      });
+      return finalizeState({
+        ...withHistory,
+        currentActor: action.winner,
+        phase: 'settlement',
+        settlement: {
+          winner: action.winner,
+          winType,
+          discarder: action.discarder,
+          scoreDelta,
+        },
+      });
     }
   }
 }

@@ -17,6 +17,7 @@ import {
   hasExactlyTwoSuits,
   normalDiscardCandidates,
 } from '../rules/lisiRules';
+import { isLegalLisiWin } from '../rules/lisiRules';
 
 export interface DiscardRoute {
   missingSuit: Suit;
@@ -70,6 +71,20 @@ export interface SelfKongRecommendation {
   kind: 'concealed-kong' | 'added-kong';
   tileKey: TileKey;
   judgement: 'recommend' | 'optional' | 'not-recommended';
+  reasons: string[];
+}
+
+export interface AfterListeningRecommendationInput {
+  lockedCounts: TileCounts;
+  melds: Meld[];
+  drawnTile?: Tile;
+  discardedTile?: Tile;
+  hasDeclaredListening: boolean;
+}
+
+export interface AfterListeningRecommendation {
+  mode: 'not-listening' | 'self-draw-win' | 'discard-win' | 'discard-drawn-tile' | 'waiting';
+  requiredDiscardKey?: TileKey;
   reasons: string[];
 }
 
@@ -249,4 +264,33 @@ export function recommendSelfKongs(input: SelfKongRecommendationInput): SelfKong
     }));
 
   return [...concealedKongs, ...addedKongs];
+}
+
+export function recommendAfterListening(input: AfterListeningRecommendationInput): AfterListeningRecommendation {
+  if (!input.hasDeclaredListening) {
+    return { mode: 'not-listening', reasons: ['player has not declared listening'] };
+  }
+
+  if (input.drawnTile) {
+    const key = tileKey(input.drawnTile);
+    const counts = { ...input.lockedCounts, [key]: (input.lockedCounts[key] ?? 0) + 1 };
+    if (isLegalLisiWin({ counts, melds: input.melds, hasDeclaredListening: true })) {
+      return { mode: 'self-draw-win', reasons: [`drawn ${key} completes a legal Lisi win`] };
+    }
+    return {
+      mode: 'discard-drawn-tile',
+      requiredDiscardKey: key,
+      reasons: [`locked listener must discard drawn ${key}`],
+    };
+  }
+
+  if (input.discardedTile) {
+    const key = tileKey(input.discardedTile);
+    const counts = { ...input.lockedCounts, [key]: (input.lockedCounts[key] ?? 0) + 1 };
+    if (isLegalLisiWin({ counts, melds: input.melds, hasDeclaredListening: true })) {
+      return { mode: 'discard-win', reasons: [`discarded ${key} completes a legal Lisi win`] };
+    }
+  }
+
+  return { mode: 'waiting', reasons: ['waiting for a winning draw or discard'] };
 }

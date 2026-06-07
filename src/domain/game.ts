@@ -16,12 +16,20 @@ export interface LastDiscard {
   bySeat: Seat;
 }
 
+export interface SettlementState {
+  winner: Seat;
+  winType: 'self-draw' | 'discard';
+  discarder?: Seat;
+  scoreDelta: Record<Seat, number>;
+}
+
 export interface GameState {
   players: PlayerState[];
   currentActor: Seat;
   direction: 'counterclockwise';
   phase: GamePhase;
   lastDiscard?: LastDiscard;
+  settlement?: SettlementState;
   knownSeenCounts: TileCounts;
   actionHistory: GameState[];
 }

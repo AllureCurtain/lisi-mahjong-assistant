@@ -121,6 +121,19 @@ describe('game reducer', () => {
     expect(() => applyAction(game, { type: 'win', winner: 'A' })).toThrow(/before listening/i);
   });
 
+  it('records settlement score when a listened player wins', () => {
+    let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
+    game = updatePlayer(game, 'A', (player) => ({
+      ...player,
+      hasDeclaredListening: true,
+      exposedKongCount: 1,
+      concealedKongCount: 1,
+    }));
+    game = applyAction(game, { type: 'win', winner: 'A', winType: 'self-draw' });
+    expect(game.phase).toBe('settlement');
+    expect(game.settlement?.scoreDelta).toEqual({ A: 70, B: -35, C: -35 });
+  });
+
   it('restores previous state with undo', () => {
     let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
     game = { ...game, phase: 'waiting-visible-discard' };

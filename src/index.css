@@ -62,11 +62,15 @@ p {
 }
 
 .status-panel,
+.setup-panel,
 .hand-panel,
+.listening-panel,
 .tile-keypad,
 .reaction-strip,
 .rivers-panel,
 .recommendation-panel,
+.call-panel,
+.settlement-panel,
 .message-panel {
   border-block: 1px solid #d7d9d2;
   padding-block: 12px;
@@ -133,7 +137,9 @@ p {
 
 .tile-button,
 .reaction-strip button,
-.secondary-action {
+.secondary-action,
+.action-list button,
+select {
   min-height: 44px;
   border: 1px solid #b7bfb0;
   border-radius: 6px;
@@ -150,7 +156,8 @@ p {
 
 .tile-button:active,
 .reaction-strip button:active,
-.secondary-action:active {
+.secondary-action:active,
+.action-list button:active {
   transform: translateY(1px);
 }
 
@@ -174,6 +181,42 @@ p {
   gap: 10px;
   margin: 0;
   padding-inline-start: 20px;
+}
+
+.form-grid,
+.action-list,
+.plain-list,
+.score-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.form-grid label {
+  display: grid;
+  gap: 5px;
+  color: #44505c;
+  font-weight: 700;
+}
+
+select {
+  width: 100%;
+}
+
+.two-up {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.score-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-block-start: 10px;
+}
+
+.score-grid span {
+  border: 1px solid #d5d8d0;
+  border-radius: 6px;
+  padding: 8px;
+  background: #ffffff;
+  text-align: center;
 }
 
 .recommendation-list li {

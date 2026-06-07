@@ -25,6 +25,18 @@ pnpm test
 pnpm build
 ```
 
+## First-Version Scope
+
+- Three-player counterclockwise turn tracking.
+- Manual tile keypad.
+- User standing tile tracking.
+- Listening validation and locked-hand behavior.
+- Standard and dragon hand checks.
+- Family scoring rules.
+- Discard, pong, and kong recommendations.
+- Undo for recorded actions.
+- Recent game persistence in `localStorage`.
+
 ## Rules Source
 
 See `docs/design.md`.

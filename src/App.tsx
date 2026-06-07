@@ -3,6 +3,7 @@ import {
   SEATS,
   createInitialGame,
   getUserPlayer,
+  parseTileKey,
   tilesFromKeys,
   updatePlayer,
   type GameState,
@@ -10,12 +11,18 @@ import {
   type Tile,
 } from './domain';
 import { recommendDiscards } from './recommendation/recommend';
-import { applyAction, undo } from './state/reducer';
+import { recommendCalls, recommendSelfKongs } from './recommendation/recommend';
+import { canDeclareListeningByStandingDiscard } from './rules/lisiRules';
+import { applyAction, recomputeKnownSeenCounts, undo } from './state/reducer';
+import { CallAdvicePanel } from './ui/CallAdvicePanel';
 import { DiscardRivers } from './ui/DiscardRivers';
 import { HandView } from './ui/HandView';
+import { ListeningPanel } from './ui/ListeningPanel';
 import { PlayerStatus } from './ui/PlayerStatus';
 import { ReactionStrip } from './ui/ReactionStrip';
 import { RecommendationPanel } from './ui/RecommendationPanel';
+import { SetupPanel } from './ui/SetupPanel';
+import { SettlementPanel } from './ui/SettlementPanel';
 import { TileKeypad } from './ui/TileKeypad';
 
 const STORAGE_KEY = 'lisi-mahjong-assistant.recent-game.v1';
@@ -42,7 +49,8 @@ function createDemoGame(): GameState {
     ]),
     standingTiles: tilesFromKeys(['bing-1']),
   }));
-  return { ...withUserHand, phase: 'waiting-visible-discard' };
+  const ready = { ...withUserHand, phase: 'waiting-visible-discard' } satisfies GameState;
+  return { ...ready, knownSeenCounts: recomputeKnownSeenCounts(ready) };
 }
 
 function loadInitialGame(): GameState {
@@ -92,6 +100,42 @@ export default function App() {
       }),
     [game.knownSeenCounts, game.players, user.concealedTiles, user.melds, user.standingTiles],
   );
+  const listeningChoices = useMemo(
+    () =>
+      user.lockedAfterListening
+        ? []
+        : canDeclareListeningByStandingDiscard({
+            concealed: user.concealedTiles,
+            standing: user.standingTiles,
+            melds: user.melds,
+          }),
+    [user.concealedTiles, user.lockedAfterListening, user.melds, user.standingTiles],
+  );
+  const callAdvice = useMemo(
+    () =>
+      game.lastDiscard
+        ? recommendCalls({
+            concealed: user.concealedTiles,
+            standing: user.standingTiles,
+            melds: user.melds,
+            seenCounts: game.knownSeenCounts,
+            opponentsListening: game.players.filter((player) => !player.isUser && player.hasDeclaredListening).length,
+            discard: game.lastDiscard.tile,
+            hasDeclaredListening: user.hasDeclaredListening,
+          })
+        : {},
+    [game.knownSeenCounts, game.lastDiscard, game.players, user.concealedTiles, user.hasDeclaredListening, user.melds, user.standingTiles],
+  );
+  const selfKongs = useMemo(
+    () =>
+      recommendSelfKongs({
+        concealed: user.concealedTiles,
+        standing: user.standingTiles,
+        melds: user.melds,
+        hasDeclaredListening: user.hasDeclaredListening,
+      }),
+    [user.concealedTiles, user.hasDeclaredListening, user.melds, user.standingTiles],
+  );
 
   function applyUiAction(action: Parameters<typeof applyAction>[1], successMessage: string) {
     try {
@@ -123,6 +167,17 @@ export default function App() {
     setMessage('已撤销一步。');
   }
 
+  function handleSeatChange(userSeat: Seat, dealerSeat: Seat) {
+    dispatch({ type: 'game', game: createInitialGame({ userSeat, dealerSeat }) });
+    setMessage('已更新座位设置。');
+  }
+
+  function handleReset() {
+    const next = createDemoGame();
+    dispatch({ type: 'game', game: next });
+    setMessage('已重开本局。');
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -137,20 +192,51 @@ export default function App() {
 
       <div className="primary-column">
         <PlayerStatus game={game} />
+        <SetupPanel game={game} onSeatChange={handleSeatChange} onReset={handleReset} />
         <HandView concealed={user.concealedTiles} standing={user.standingTiles} onTileSelect={handleTileSelect} />
+        <ListeningPanel
+          choices={listeningChoices}
+          onDeclare={(choice) =>
+            applyUiAction(
+              { type: 'declare-listening', seat: user.seat, faceDownTile: parseTileKey(choice.discardKey) },
+              `已扣 ${choice.discardKey} 听牌。`,
+            )
+          }
+        />
         <TileKeypad onSelect={handleTileSelect} />
         <ReactionStrip
           seats={SEATS}
           onNoCall={() => applyUiAction({ type: 'no-call' }, '无人响应，进入下一家。')}
           onPong={handlePong}
           onKong={handleKong}
-          onWin={() => applyUiAction({ type: 'win', winner: user.seat }, '进入结算。')}
+          onWin={() =>
+            applyUiAction(
+              { type: 'win', winner: user.seat, winType: 'discard', discarder: game.lastDiscard?.bySeat },
+              '进入结算。',
+            )
+          }
         />
         <DiscardRivers game={game} />
       </div>
 
       <aside className="side-column">
         <RecommendationPanel recommendations={recommendations} />
+        <CallAdvicePanel callAdvice={callAdvice} selfKongs={selfKongs} />
+        <SettlementPanel
+          scoreDelta={game.settlement?.scoreDelta}
+          onSelfDraw={() => applyUiAction({ type: 'win', winner: user.seat, winType: 'self-draw' }, '已按自摸结算。')}
+          onDiscardWin={() =>
+            applyUiAction(
+              {
+                type: 'win',
+                winner: user.seat,
+                winType: 'discard',
+                discarder: game.lastDiscard?.bySeat ?? 'B',
+              },
+              '已按点炮结算。',
+            )
+          }
+        />
         <section className="message-panel" aria-label="操作消息">
           <h2>消息</h2>
           <p>{message}</p>

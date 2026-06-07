@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { countTiles, makeTile, tilesFromKeys } from '../domain';
-import { recommendCalls, recommendDiscards, recommendSelfKongs } from './recommend';
+import {
+  recommendAfterListening,
+  recommendCalls,
+  recommendDiscards,
+  recommendSelfKongs,
+} from './recommend';
 
 describe('recommendations', () => {
   it('never recommends normal discard of a standing tile', () => {
@@ -89,5 +94,31 @@ describe('recommendations', () => {
     });
     expect(result.map((item) => item.tileKey)).toContain('tiao-6');
     expect(result[0].kind).toBe('concealed-kong');
+  });
+
+  it('switches to locked-hand guidance after listening', () => {
+    const result = recommendAfterListening({
+      lockedCounts: countTiles(
+        tilesFromKeys([
+          'wan-1',
+          'wan-2',
+          'wan-3',
+          'wan-4',
+          'wan-5',
+          'wan-6',
+          'tiao-2',
+          'tiao-3',
+          'tiao-4',
+          'tiao-7',
+          'tiao-7',
+          'tiao-7',
+          'wan-9',
+        ]),
+      ),
+      melds: [],
+      drawnTile: makeTile('wan', 9),
+      hasDeclaredListening: true,
+    });
+    expect(result.mode).toBe('self-draw-win');
   });
 });
