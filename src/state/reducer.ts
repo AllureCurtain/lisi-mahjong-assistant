@@ -19,6 +19,8 @@ import { canDeclareListeningByStandingDiscard, normalDiscardCandidates } from '.
 import { settleHand } from '../scoring/scoring';
 
 export type GameAction =
+  | { type: 'setup-user-tile'; tile: Tile; standing: boolean }
+  | { type: 'mark-listening'; seat: Seat }
   | { type: 'visible-discard'; tile: Tile }
   | { type: 'no-call' }
   | { type: 'pong'; caller: Seat }
@@ -127,9 +129,6 @@ export function recomputeKnownSeenCounts(game: GameState): TileCounts {
     for (const tile of user.concealedTiles) {
       counts = addCount(counts, tile, 1);
     }
-    for (const tile of user.standingTiles) {
-      counts = addCount(counts, tile, 1);
-    }
     if (user.faceDownListeningDiscard) {
       counts = addCount(counts, user.faceDownListeningDiscard, 1);
     }
@@ -213,6 +212,28 @@ export function applyAction(game: GameState, action: GameAction): GameState {
   const withHistory = pushHistory(game);
 
   switch (action.type) {
+    case 'setup-user-tile': {
+      const user = withHistory.players.find((player) => player.isUser);
+      if (!user) {
+        throw new Error('Game has no user player.');
+      }
+      const updated = updatePlayer(withHistory, user.seat, (player) => ({
+        ...player,
+        concealedTiles: [...player.concealedTiles, action.tile],
+        standingTiles: action.standing ? [...player.standingTiles, action.tile] : player.standingTiles,
+      }));
+      return finalizeState(updated);
+    }
+
+    case 'mark-listening': {
+      const updated = updatePlayer(withHistory, action.seat, (player) => ({
+        ...player,
+        hasDeclaredListening: true,
+        lockedAfterListening: player.isUser ? player.lockedAfterListening : false,
+      }));
+      return finalizeState(updated);
+    }
+
     case 'visible-discard': {
       const discarded = discardForCurrentActor(withHistory, action.tile);
       return finalizeState({

@@ -96,7 +96,8 @@ p {
 .player-chips,
 .reaction-strip,
 .hand-tiles,
-.river-tiles {
+.river-tiles,
+.segmented-control {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -139,6 +140,7 @@ p {
 .reaction-strip button,
 .secondary-action,
 .action-list button,
+.segmented-control button,
 select {
   min-height: 44px;
   border: 1px solid #b7bfb0;
@@ -157,8 +159,15 @@ select {
 .tile-button:active,
 .reaction-strip button:active,
 .secondary-action:active,
-.action-list button:active {
+.action-list button:active,
+.segmented-control button:active {
   transform: translateY(1px);
+}
+
+.segmented-control .is-active {
+  background: #e8eee0;
+  border-color: #7f966a;
+  font-weight: 700;
 }
 
 .tile-button-standing {
@@ -203,6 +212,10 @@ select {
 }
 
 .two-up {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.three-up {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -276,6 +289,10 @@ select {
   }
 
   .river-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .three-up {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

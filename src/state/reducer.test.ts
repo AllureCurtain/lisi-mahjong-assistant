@@ -1,8 +1,43 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGame, getPlayer, makeTile, tilesFromKeys, updatePlayer } from '../domain';
-import { applyAction, nextSeatCounterclockwise, undo } from './reducer';
+import { applyAction, nextSeatCounterclockwise, recomputeKnownSeenCounts, undo } from './reducer';
 
 describe('game reducer', () => {
+  it('does not double count standing tiles that are already in the user concealed hand', () => {
+    let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
+    game = updatePlayer(game, 'A', (player) => ({
+      ...player,
+      concealedTiles: tilesFromKeys(['bing-1']),
+      standingTiles: tilesFromKeys(['bing-1']),
+    }));
+    expect(recomputeKnownSeenCounts(game)['bing-1']).toBe(1);
+  });
+
+  it('records setup hand tiles and standing tiles without exceeding four copies', () => {
+    let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
+    game = applyAction(game, { type: 'setup-user-tile', tile: makeTile('wan', 1), standing: false });
+    game = applyAction(game, { type: 'setup-user-tile', tile: makeTile('wan', 1), standing: true });
+    expect(getPlayer(game, 'A').concealedTiles.map((tile) => `${tile.suit}-${tile.rank}`)).toEqual([
+      'wan-1',
+      'wan-1',
+    ]);
+    expect(getPlayer(game, 'A').standingTiles.map((tile) => `${tile.suit}-${tile.rank}`)).toEqual([
+      'wan-1',
+    ]);
+    game = applyAction(game, { type: 'setup-user-tile', tile: makeTile('wan', 1), standing: false });
+    game = applyAction(game, { type: 'setup-user-tile', tile: makeTile('wan', 1), standing: false });
+    expect(() =>
+      applyAction(game, { type: 'setup-user-tile', tile: makeTile('wan', 1), standing: false }),
+    ).toThrow(/exceed four/i);
+  });
+
+  it('marks an opponent as listening without knowing their face-down standing tile', () => {
+    let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
+    game = applyAction(game, { type: 'mark-listening', seat: 'B' });
+    expect(getPlayer(game, 'B').hasDeclaredListening).toBe(true);
+    expect(getPlayer(game, 'B').faceDownListeningDiscard).toBeUndefined();
+  });
+
   it('advances counterclockwise after a no-call discard', () => {
     let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
     game = { ...game, phase: 'waiting-visible-discard' };

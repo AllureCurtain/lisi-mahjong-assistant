@@ -83,6 +83,7 @@ function gameReducer(game: GameState, action: UiAction): GameState {
 export default function App() {
   const [game, dispatch] = useReducer(gameReducer, undefined, loadInitialGame);
   const [message, setMessage] = useState('准备记录本局。');
+  const [tileEntryMode, setTileEntryMode] = useState<'discard' | 'hand' | 'standing'>('discard');
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(game));
@@ -147,6 +148,13 @@ export default function App() {
   }
 
   function handleTileSelect(tile: Tile) {
+    if (tileEntryMode === 'hand' || tileEntryMode === 'standing') {
+      applyUiAction(
+        { type: 'setup-user-tile', tile, standing: tileEntryMode === 'standing' },
+        tileEntryMode === 'standing' ? '已录入立牌。' : '已录入手牌。',
+      );
+      return;
+    }
     if (game.phase === 'waiting-user-draw') {
       applyUiAction({ type: 'user-draw', tile }, '已记录摸牌。');
       return;
@@ -192,7 +200,14 @@ export default function App() {
 
       <div className="primary-column">
         <PlayerStatus game={game} />
-        <SetupPanel game={game} onSeatChange={handleSeatChange} onReset={handleReset} />
+        <SetupPanel
+          game={game}
+          tileEntryMode={tileEntryMode}
+          onTileEntryModeChange={setTileEntryMode}
+          onSeatChange={handleSeatChange}
+          onMarkListening={(seat) => applyUiAction({ type: 'mark-listening', seat }, `已标记 ${seat} 听牌。`)}
+          onReset={handleReset}
+        />
         <HandView concealed={user.concealedTiles} standing={user.standingTiles} onTileSelect={handleTileSelect} />
         <ListeningPanel
           choices={listeningChoices}
