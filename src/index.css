@@ -142,6 +142,7 @@ p {
 .reaction-strip button,
 .secondary-action,
 .action-list button,
+.kong-advice button,
 .segmented-control button,
 select {
   min-height: 44px;
@@ -162,6 +163,7 @@ select {
 .reaction-strip button:active,
 .secondary-action:active,
 .action-list button:active,
+.kong-advice button:active,
 .segmented-control button:active {
   transform: translateY(1px);
 }
@@ -197,6 +199,7 @@ select {
 .form-grid,
 .action-list,
 .plain-list,
+.kong-advice,
 .score-grid {
   display: grid;
   gap: 8px;

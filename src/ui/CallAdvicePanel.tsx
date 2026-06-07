@@ -6,9 +6,10 @@ import type {
 export interface CallAdvicePanelProps {
   callAdvice: CallRecommendations;
   selfKongs: SelfKongRecommendation[];
+  onSelfKong: (item: SelfKongRecommendation) => void;
 }
 
-export function CallAdvicePanel({ callAdvice, selfKongs }: CallAdvicePanelProps) {
+export function CallAdvicePanel({ callAdvice, selfKongs, onSelfKong }: CallAdvicePanelProps) {
   const callItems = [callAdvice.pong, callAdvice.kong].filter((item) => item !== undefined);
 
   return (
@@ -22,9 +23,14 @@ export function CallAdvicePanel({ callAdvice, selfKongs }: CallAdvicePanelProps)
             </p>
           ))}
           {selfKongs.map((item) => (
-            <p key={`${item.kind}-${item.tileKey}`}>
-              <strong>{item.kind}</strong> {item.tileKey}：{item.judgement}，{item.reasons.join('；')}
-            </p>
+            <div className="kong-advice" key={`${item.kind}-${item.tileKey}`}>
+              <button onClick={() => onSelfKong(item)} type="button">
+                {item.kind === 'concealed-kong' ? '暗杠' : '补杠'} {item.tileKey}
+              </button>
+              <p>
+                <strong>{item.kind}</strong>：{item.judgement}，{item.reasons.join('；')}
+              </p>
+            </div>
           ))}
         </div>
       ) : (

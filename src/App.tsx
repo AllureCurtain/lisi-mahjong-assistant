@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useReducer, useState } from 'react';
 import {
   SEATS,
+  countTiles,
   createInitialGame,
+  getPlayer,
   getUserPlayer,
   parseTileKey,
   tilesFromKeys,
@@ -10,8 +12,13 @@ import {
   type Seat,
   type Tile,
 } from './domain';
-import { recommendDiscards } from './recommendation/recommend';
-import { recommendCalls, recommendSelfKongs } from './recommendation/recommend';
+import {
+  recommendAfterListening,
+  recommendCalls,
+  recommendDiscards,
+  recommendSelfKongs,
+  type SelfKongRecommendation,
+} from './recommendation/recommend';
 import { canDeclareListeningByStandingDiscard } from './rules/lisiRules';
 import { applyAction, recomputeKnownSeenCounts, undo } from './state/reducer';
 import { CallAdvicePanel } from './ui/CallAdvicePanel';
@@ -138,6 +145,28 @@ export default function App() {
       }),
     [user.concealedTiles, user.hasDeclaredListening, user.melds, user.standingTiles],
   );
+  const afterListeningRecommendation = useMemo(
+    () =>
+      user.lockedAfterListening
+        ? recommendAfterListening({
+            lockedCounts: countTiles(user.concealedTiles),
+            melds: user.melds,
+            drawnTile: user.drawnTileAfterListening,
+            discardedTile:
+              game.lastDiscard && game.lastDiscard.bySeat !== user.seat ? game.lastDiscard.tile : undefined,
+            hasDeclaredListening: user.hasDeclaredListening,
+          })
+        : undefined,
+    [
+      game.lastDiscard,
+      user.concealedTiles,
+      user.drawnTileAfterListening,
+      user.hasDeclaredListening,
+      user.lockedAfterListening,
+      user.melds,
+      user.seat,
+    ],
+  );
 
   function applyUiAction(action: Parameters<typeof applyAction>[1], successMessage: string) {
     try {
@@ -160,6 +189,10 @@ export default function App() {
       applyUiAction({ type: 'user-draw', tile }, '已记录摸牌。');
       return;
     }
+    if (game.phase === 'waiting-tail-draw-discard' && getPlayer(game, game.currentActor).isUser) {
+      applyUiAction({ type: 'user-draw', tile }, '已记录杠后补牌。');
+      return;
+    }
     applyUiAction({ type: 'visible-discard', tile }, '已记录可见弃牌。');
   }
 
@@ -169,6 +202,15 @@ export default function App() {
 
   function handleKong(seat: Seat) {
     applyUiAction({ type: 'exposed-kong', caller: seat }, `${seat} 杠，等待杠后出牌。`);
+  }
+
+  function handleSelfKong(item: SelfKongRecommendation) {
+    const tile = parseTileKey(item.tileKey);
+    if (item.kind === 'concealed-kong') {
+      applyUiAction({ type: 'concealed-kong', caller: user.seat, tile }, '已记录暗杠，等待杠后补牌。');
+      return;
+    }
+    applyUiAction({ type: 'added-kong', caller: user.seat, tile }, '已记录补杠，等待杠后补牌。');
   }
 
   function handleUndo() {
@@ -237,8 +279,12 @@ export default function App() {
       </div>
 
       <aside className="side-column">
-        <RecommendationPanel recommendations={recommendations} />
-        <CallAdvicePanel callAdvice={callAdvice} selfKongs={selfKongs} />
+        <RecommendationPanel
+          recommendations={recommendations}
+          lockedAfterListening={user.lockedAfterListening}
+          afterListening={afterListeningRecommendation}
+        />
+        <CallAdvicePanel callAdvice={callAdvice} selfKongs={selfKongs} onSelfKong={handleSelfKong} />
         <SettlementPanel
           scoreDelta={game.settlement?.scoreDelta}
           onSelfDraw={() => applyUiAction({ type: 'win', winner: user.seat, winType: 'self-draw' }, '已按自摸结算。')}
