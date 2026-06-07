@@ -67,6 +67,7 @@ p {
 .listening-panel,
 .tile-keypad,
 .reaction-strip,
+.meld-panel,
 .rivers-panel,
 .recommendation-panel,
 .call-panel,
@@ -97,7 +98,8 @@ p {
 .reaction-strip,
 .hand-tiles,
 .river-tiles,
-.segmented-control {
+.segmented-control,
+.meld-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -261,6 +263,30 @@ select {
   border-radius: 5px;
   padding: 4px 6px;
   background: #ffffff;
+}
+
+.meld-item {
+  border: 1px solid #d5d8d0;
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: #ffffff;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(31, 41, 51, 0.35);
+}
+
+.settlement-dialog {
+  width: min(100%, 420px);
+  border: 1px solid #c9cec5;
+  border-radius: 8px;
+  padding: 18px;
+  background: #fbfcf8;
 }
 
 .muted {

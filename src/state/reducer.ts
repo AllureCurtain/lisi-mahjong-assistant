@@ -244,12 +244,16 @@ export function applyAction(game: GameState, action: GameAction): GameState {
     }
 
     case 'no-call':
-      return finalizeState({
-        ...withHistory,
-        currentActor: nextSeatCounterclockwise(withHistory.currentActor),
-        lastDiscard: undefined,
-        phase: 'waiting-visible-discard',
-      });
+      {
+        const nextActor = nextSeatCounterclockwise(withHistory.currentActor);
+        const nextPlayer = getPlayer(withHistory, nextActor);
+        return finalizeState({
+          ...withHistory,
+          currentActor: nextActor,
+          lastDiscard: undefined,
+          phase: nextPlayer.isUser ? 'waiting-user-draw' : 'waiting-visible-discard',
+        });
+      }
 
     case 'pong': {
       if (!withHistory.lastDiscard) {

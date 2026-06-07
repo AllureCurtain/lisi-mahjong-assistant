@@ -18,6 +18,7 @@ import { CallAdvicePanel } from './ui/CallAdvicePanel';
 import { DiscardRivers } from './ui/DiscardRivers';
 import { HandView } from './ui/HandView';
 import { ListeningPanel } from './ui/ListeningPanel';
+import { MeldArea } from './ui/MeldArea';
 import { PlayerStatus } from './ui/PlayerStatus';
 import { ReactionStrip } from './ui/ReactionStrip';
 import { RecommendationPanel } from './ui/RecommendationPanel';
@@ -219,6 +220,7 @@ export default function App() {
           }
         />
         <TileKeypad onSelect={handleTileSelect} />
+        <MeldArea game={game} />
         <ReactionStrip
           seats={SEATS}
           onNoCall={() => applyUiAction({ type: 'no-call' }, '无人响应，进入下一家。')}
@@ -258,6 +260,24 @@ export default function App() {
           <p className="muted">阶段：{game.phase}</p>
         </section>
       </aside>
+      {game.settlement ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="settlement-dialog" role="dialog" aria-label="结算结果">
+            <h2>结算结果</h2>
+            <div className="score-grid">
+              {SEATS.map((seat) => (
+                <span key={seat}>
+                  {seat}: {game.settlement!.scoreDelta[seat] > 0 ? '+' : ''}
+                  {game.settlement!.scoreDelta[seat]}
+                </span>
+              ))}
+            </div>
+            <button className="secondary-action" onClick={handleReset} type="button">
+              新一局
+            </button>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -48,6 +48,15 @@ describe('game reducer', () => {
     expect(nextSeatCounterclockwise('C')).toBe('A');
   });
 
+  it('prompts for user draw when no-call progression reaches the user seat', () => {
+    let game = createInitialGame({ userSeat: 'A', dealerSeat: 'C' });
+    game = { ...game, phase: 'waiting-visible-discard' };
+    game = applyAction(game, { type: 'visible-discard', tile: makeTile('wan', 1) });
+    game = applyAction(game, { type: 'no-call' });
+    expect(game.currentActor).toBe('A');
+    expect(game.phase).toBe('waiting-user-draw');
+  });
+
   it('jumps to pong caller after a discard', () => {
     let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
     game = { ...game, phase: 'waiting-visible-discard' };
