@@ -10,6 +10,7 @@ export interface PlayerState {
   concealedTiles: Tile[];
   standingTiles: Tile[];
   faceDownListeningDiscard?: Tile;
+  drawnTileAfterListening?: Tile;
   melds: Meld[];
   discards: Tile[];
   exposedKongCount: number;
