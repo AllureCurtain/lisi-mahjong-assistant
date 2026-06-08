@@ -53,11 +53,32 @@ p {
 }
 
 .app-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   margin-block-end: 16px;
+}
+
+.app-header > div {
+  min-width: 0;
+}
+
+.mobile-workspace-nav {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px;
+  margin-block-end: 14px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: rgba(246, 248, 251, 0.96);
+  box-shadow: 0 10px 24px -20px rgba(23, 31, 38, 0.38);
 }
 
 .primary-column,
@@ -65,6 +86,20 @@ p {
   display: grid;
   gap: 14px;
   min-width: 0;
+}
+
+.primary-column {
+  margin-block-end: 14px;
+}
+
+.workspace-panel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.workspace-panel:not(.is-active) {
+  display: none;
 }
 
 .status-panel,
@@ -106,7 +141,6 @@ p {
 
 .player-chips,
 .reaction-strip,
-.hand-tiles,
 .river-tiles,
 .segmented-control,
 .meld-list {
@@ -124,6 +158,18 @@ p {
   border-radius: 6px;
   padding: 4px 8px;
   background: #ffffff;
+}
+
+.hand-tiles {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.hand-tiles .tile-button {
+  min-width: 0;
+  width: 100%;
 }
 
 .hand-suit,
@@ -153,6 +199,7 @@ p {
 .secondary-action,
 .action-list button,
 .kong-advice button,
+.mobile-workspace-nav button,
 .segmented-control button,
 select {
   min-height: 44px;
@@ -175,6 +222,7 @@ select {
 .secondary-action:hover,
 .action-list button:hover,
 .kong-advice button:hover,
+.mobile-workspace-nav button:hover,
 .segmented-control button:hover {
   border-color: #8aa4b8;
   background: #f8fbfd;
@@ -185,6 +233,7 @@ select {
 .secondary-action:focus-visible,
 .action-list button:focus-visible,
 .kong-advice button:focus-visible,
+.mobile-workspace-nav button:focus-visible,
 .segmented-control button:focus-visible,
 select:focus-visible {
   outline: 3px solid rgba(15, 118, 110, 0.2);
@@ -196,8 +245,16 @@ select:focus-visible {
 .secondary-action:active,
 .action-list button:active,
 .kong-advice button:active,
+.mobile-workspace-nav button:active,
 .segmented-control button:active {
   transform: translateY(1px);
+}
+
+.mobile-workspace-nav button[aria-pressed="true"] {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #ffffff;
+  font-weight: 700;
 }
 
 .segmented-control .is-active {
@@ -220,6 +277,21 @@ select:focus-visible {
 
 .secondary-action {
   flex: 0 0 auto;
+}
+
+.app-header .secondary-action {
+  justify-self: end;
+}
+
+.mobile-workspace-nav button,
+.secondary-action {
+  width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.app-header .secondary-action {
+  width: auto;
 }
 
 .recommendation-list {
@@ -339,7 +411,21 @@ select {
   }
 
   .app-header {
+    display: flex;
     grid-column: 1 / -1;
+  }
+
+  .mobile-workspace-nav {
+    display: none;
+  }
+
+  .primary-column {
+    margin-block-end: 0;
+  }
+
+  .workspace-panel,
+  .workspace-panel:not(.is-active) {
+    display: contents;
   }
 
   .tile-row {
@@ -349,6 +435,10 @@ select {
 
   .tile-row-buttons {
     grid-template-columns: repeat(9, minmax(0, 1fr));
+  }
+
+  .hand-tiles {
+    grid-template-columns: repeat(auto-fit, minmax(58px, max-content));
   }
 
   .river-grid {

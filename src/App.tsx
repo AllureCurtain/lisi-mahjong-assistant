@@ -35,6 +35,15 @@ import { TileKeypad } from './ui/TileKeypad';
 
 const STORAGE_KEY = 'lisi-mahjong-assistant.recent-game.v1';
 
+type MobileWorkspace = 'record' | 'advice' | 'table' | 'setup';
+
+const mobileWorkspaces: Array<{ id: MobileWorkspace; label: string }> = [
+  { id: 'record', label: '记录' },
+  { id: 'advice', label: '建议' },
+  { id: 'table', label: '牌桌' },
+  { id: 'setup', label: '设置' },
+];
+
 function createDemoGame(): GameState {
   const game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
   const withUserHand = updatePlayer(game, 'A', (player) => ({
@@ -91,6 +100,7 @@ export default function App() {
   const [game, dispatch] = useReducer(gameReducer, undefined, loadInitialGame);
   const [message, setMessage] = useState('准备记录本局。');
   const [tileEntryMode, setTileEntryMode] = useState<'discard' | 'hand' | 'standing'>('discard');
+  const [activeWorkspace, setActiveWorkspace] = useState<MobileWorkspace>('record');
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(game));
@@ -252,52 +262,85 @@ export default function App() {
         </button>
       </header>
 
+      <nav className="mobile-workspace-nav" aria-label="手机工作区">
+        {mobileWorkspaces.map((workspace) => (
+          <button
+            aria-pressed={activeWorkspace === workspace.id}
+            key={workspace.id}
+            onClick={() => setActiveWorkspace(workspace.id)}
+            type="button"
+          >
+            {workspace.label}
+          </button>
+        ))}
+      </nav>
+
       <div className="primary-column">
-        <PlayerStatus game={game} />
-        <SetupPanel
-          game={game}
-          tileEntryMode={tileEntryMode}
-          onTileEntryModeChange={setTileEntryMode}
-          onSeatChange={handleSeatChange}
-          onMarkListening={(seat) => applyUiAction({ type: 'mark-listening', seat }, `已标记 ${seat} 听牌。`)}
-          onReset={handleReset}
-        />
-        <HandView concealed={user.concealedTiles} standing={user.standingTiles} onTileSelect={handleTileSelect} />
-        <ListeningPanel
-          choices={listeningChoices}
-          onDeclare={(choice) =>
-            applyUiAction(
-              { type: 'declare-listening', seat: user.seat, faceDownTile: parseTileKey(choice.discardKey) },
-              `已扣 ${choice.discardKey} 听牌。`,
-            )
-          }
-        />
-        <TileKeypad onSelect={handleTileSelect} />
-        <MeldArea game={game} />
-        <ReactionStrip
-          seats={SEATS}
-          onNoCall={() => applyUiAction({ type: 'no-call' }, '无人响应，进入下一家。')}
-          onPong={handlePong}
-          onKong={handleKong}
-          onWin={() =>
-            handleDiscardWin('进入结算。')
-          }
-        />
-        <DiscardRivers game={game} />
+        <section
+          aria-label="记录工作区"
+          className={`workspace-panel record-workspace${activeWorkspace === 'record' ? ' is-active' : ''}`}
+        >
+          <PlayerStatus game={game} />
+          <HandView concealed={user.concealedTiles} standing={user.standingTiles} onTileSelect={handleTileSelect} />
+          <ListeningPanel
+            choices={listeningChoices}
+            onDeclare={(choice) =>
+              applyUiAction(
+                { type: 'declare-listening', seat: user.seat, faceDownTile: parseTileKey(choice.discardKey) },
+                `已扣 ${choice.discardKey} 听牌。`,
+              )
+            }
+          />
+          <TileKeypad onSelect={handleTileSelect} />
+          <ReactionStrip
+            seats={SEATS}
+            onNoCall={() => applyUiAction({ type: 'no-call' }, '无人响应，进入下一家。')}
+            onPong={handlePong}
+            onKong={handleKong}
+            onWin={() =>
+              handleDiscardWin('进入结算。')
+            }
+          />
+        </section>
+        <section
+          aria-label="牌桌工作区"
+          className={`workspace-panel table-workspace${activeWorkspace === 'table' ? ' is-active' : ''}`}
+        >
+          <MeldArea game={game} />
+          <DiscardRivers game={game} />
+        </section>
+        <section
+          aria-label="设置工作区"
+          className={`workspace-panel setup-workspace${activeWorkspace === 'setup' ? ' is-active' : ''}`}
+        >
+          <SetupPanel
+            game={game}
+            tileEntryMode={tileEntryMode}
+            onTileEntryModeChange={setTileEntryMode}
+            onSeatChange={handleSeatChange}
+            onMarkListening={(seat) => applyUiAction({ type: 'mark-listening', seat }, `已标记 ${seat} 听牌。`)}
+            onReset={handleReset}
+          />
+        </section>
       </div>
 
       <aside className="side-column">
-        <RecommendationPanel
-          recommendations={recommendations}
-          lockedAfterListening={user.lockedAfterListening}
-          afterListening={afterListeningRecommendation}
-        />
-        <CallAdvicePanel callAdvice={callAdvice} selfKongs={selfKongs} onSelfKong={handleSelfKong} />
-        <SettlementPanel
-          scoreDelta={game.settlement?.scoreDelta}
-          onSelfDraw={() => applyUiAction({ type: 'win', winner: user.seat, winType: 'self-draw' }, '已按自摸结算。')}
-          onDiscardWin={() => handleDiscardWin('已按点炮结算。')}
-        />
+        <section
+          aria-label="建议工作区"
+          className={`workspace-panel advice-workspace${activeWorkspace === 'advice' ? ' is-active' : ''}`}
+        >
+          <RecommendationPanel
+            recommendations={recommendations}
+            lockedAfterListening={user.lockedAfterListening}
+            afterListening={afterListeningRecommendation}
+          />
+          <CallAdvicePanel callAdvice={callAdvice} selfKongs={selfKongs} onSelfKong={handleSelfKong} />
+          <SettlementPanel
+            scoreDelta={game.settlement?.scoreDelta}
+            onSelfDraw={() => applyUiAction({ type: 'win', winner: user.seat, winType: 'self-draw' }, '已按自摸结算。')}
+            onDiscardWin={() => handleDiscardWin('已按点炮结算。')}
+          />
+        </section>
         <section className="message-panel" aria-label="操作消息">
           <h2>消息</h2>
           <p>{message}</p>

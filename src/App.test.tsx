@@ -29,6 +29,28 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: '自摸结算' })).toBeInTheDocument();
   });
 
+  it('uses a mobile workspace switcher to keep small screens focused', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const workspaceNav = screen.getByRole('navigation', { name: '手机工作区' });
+    expect(within(workspaceNav).getByRole('button', { name: '记录' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByLabelText('记录工作区')).toHaveClass('is-active');
+    expect(screen.getByLabelText('建议工作区')).not.toHaveClass('is-active');
+
+    await user.click(within(workspaceNav).getByRole('button', { name: '建议' }));
+
+    expect(within(workspaceNav).getByRole('button', { name: '建议' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByLabelText('建议工作区')).toHaveClass('is-active');
+    expect(screen.getByLabelText('记录工作区')).not.toHaveClass('is-active');
+  });
+
   it('shows settlement as a dialog after a valid self-draw settlement', async () => {
     const user = userEvent.setup();
     let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });

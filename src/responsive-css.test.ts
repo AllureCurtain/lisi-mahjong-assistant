@@ -20,6 +20,29 @@ describe('responsive CSS guardrails', () => {
     expect(css).toContain('grid-template-columns: repeat(9, minmax(0, 1fr))');
   });
 
+  it('hides inactive mobile workspaces and restores the full workspace on wider screens', () => {
+    expect(css).toContain('.workspace-panel:not(.is-active)');
+    expect(css).toContain('.mobile-workspace-nav');
+    expect(css).toContain('.workspace-panel:not(.is-active) {');
+    expect(css).toContain('display: contents');
+    expect(css).toContain('.mobile-workspace-nav {\n    display: none;');
+  });
+
+  it('keeps mobile header and workspace tabs from forcing horizontal scrolling', () => {
+    expect(css).toContain('grid-template-columns: minmax(0, 1fr)');
+    expect(css).toContain('flex-wrap: wrap');
+    expect(css).toContain('min-width: 0');
+    expect(css).toContain('overflow-wrap: anywhere');
+    expect(css).toContain('width: 100%');
+    expect(css).toContain('.mobile-workspace-nav button');
+  });
+
+  it('uses a constrained mobile hand grid so hand tiles cannot widen the page', () => {
+    expect(css).toContain('.hand-tiles {');
+    expect(css).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
+    expect(css).toContain('.hand-tiles .tile-button');
+  });
+
   it('switches to a wider tablet and desktop layout', () => {
     expect(css).toContain('grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.75fr)');
     expect(css).toContain('@media (min-width: 1120px)');
