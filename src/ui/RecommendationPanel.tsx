@@ -19,6 +19,16 @@ function afterListeningText(afterListening?: AfterListeningRecommendation): stri
   return '锁手后不再显示手牌优化建议，只记录摸牌后必须打出的那张牌。';
 }
 
+function routeShapeLabel(shape: DiscardRecommendation['route']['shape']): string {
+  if (shape === 'standard') {
+    return '标准路线';
+  }
+  if (shape === 'dragon') {
+    return '龙牌路线';
+  }
+  return '标准/龙牌路线';
+}
+
 export function RecommendationPanel({
   recommendations,
   lockedAfterListening = false,
@@ -36,7 +46,9 @@ export function RecommendationPanel({
             <li key={item.discardKey}>
               <div className="recommendation-line">
                 <strong>打 {item.discardKey}</strong>
-                <span>缺 {item.route.missingSuit}</span>
+                <span>
+                  缺 {item.route.missingSuit} · {routeShapeLabel(item.route.shape)}
+                </span>
               </div>
               <p>{item.reasons.join('；')}</p>
               {item.warnings.length > 0 ? <p className="warning-text">{item.warnings.join('；')}</p> : null}

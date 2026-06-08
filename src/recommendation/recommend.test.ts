@@ -45,6 +45,35 @@ describe('recommendations', () => {
     expect(best.reasons.join(' ')).toContain('standing');
   });
 
+  it('derives the missing-suit route from the legal listening path after standing discard', () => {
+    const result = recommendDiscards({
+      concealed: tilesFromKeys([
+        'wan-1',
+        'wan-2',
+        'wan-3',
+        'wan-4',
+        'wan-5',
+        'wan-6',
+        'tiao-2',
+        'tiao-3',
+        'tiao-4',
+        'tiao-7',
+        'tiao-7',
+        'tiao-7',
+        'wan-9',
+        'bing-1',
+        'bing-2',
+      ]),
+      standing: tilesFromKeys(['bing-1']),
+      melds: [],
+      seenCounts: {},
+      opponentsListening: 0,
+    });
+    const route = result.find((item) => item.discardKey === 'bing-2')?.route;
+    expect(route?.missingSuit).toBe('bing');
+    expect(route?.shape).toBe('standard');
+  });
+
   it('adds risk warnings when opponents have declared listening', () => {
     const result = recommendDiscards({
       concealed: tilesFromKeys(['wan-1', 'wan-2', 'wan-3', 'tiao-1', 'tiao-2', 'tiao-3']),

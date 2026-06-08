@@ -75,7 +75,6 @@ function loadInitialGame(): GameState {
 
 type UiAction =
   | { type: 'game'; game: GameState }
-  | { type: 'apply'; action: Parameters<typeof applyAction>[1] }
   | { type: 'undo' };
 
 function gameReducer(game: GameState, action: UiAction): GameState {
@@ -85,7 +84,7 @@ function gameReducer(game: GameState, action: UiAction): GameState {
   if (action.type === 'undo') {
     return undo(game);
   }
-  return applyAction(game, action.action);
+  return game;
 }
 
 export default function App() {
@@ -170,7 +169,8 @@ export default function App() {
 
   function applyUiAction(action: Parameters<typeof applyAction>[1], successMessage: string) {
     try {
-      dispatch({ type: 'apply', action });
+      const nextGame = applyAction(game, action);
+      dispatch({ type: 'game', game: nextGame });
       setMessage(successMessage);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '动作无法记录。');
@@ -211,6 +211,17 @@ export default function App() {
       return;
     }
     applyUiAction({ type: 'added-kong', caller: user.seat, tile }, '已记录补杠，等待杠后补牌。');
+  }
+
+  function handleDiscardWin(successMessage: string) {
+    if (!game.lastDiscard || game.lastDiscard.bySeat === user.seat) {
+      setMessage('需要先记录对手弃牌后才能点炮结算。');
+      return;
+    }
+    applyUiAction(
+      { type: 'win', winner: user.seat, winType: 'discard', discarder: game.lastDiscard.bySeat },
+      successMessage,
+    );
   }
 
   function handleUndo() {
@@ -269,10 +280,7 @@ export default function App() {
           onPong={handlePong}
           onKong={handleKong}
           onWin={() =>
-            applyUiAction(
-              { type: 'win', winner: user.seat, winType: 'discard', discarder: game.lastDiscard?.bySeat },
-              '进入结算。',
-            )
+            handleDiscardWin('进入结算。')
           }
         />
         <DiscardRivers game={game} />
@@ -288,17 +296,7 @@ export default function App() {
         <SettlementPanel
           scoreDelta={game.settlement?.scoreDelta}
           onSelfDraw={() => applyUiAction({ type: 'win', winner: user.seat, winType: 'self-draw' }, '已按自摸结算。')}
-          onDiscardWin={() =>
-            applyUiAction(
-              {
-                type: 'win',
-                winner: user.seat,
-                winType: 'discard',
-                discarder: game.lastDiscard?.bySeat ?? 'B',
-              },
-              '已按点炮结算。',
-            )
-          }
+          onDiscardWin={() => handleDiscardWin('已按点炮结算。')}
         />
         <section className="message-panel" aria-label="操作消息">
           <h2>消息</h2>

@@ -1,5 +1,6 @@
 import {
   SUITS,
+  addCount,
   countTiles,
   keysFromTiles,
   parseTileKey,
@@ -18,6 +19,7 @@ import {
   normalDiscardCandidates,
 } from '../rules/lisiRules';
 import { isLegalLisiWin } from '../rules/lisiRules';
+import { isCompleteDragonHand, isCompleteStandardHand } from '../rules/handEvaluator';
 
 export interface DiscardRoute {
   missingSuit: Suit;
@@ -105,6 +107,37 @@ function routeForTiles(tiles: Tile[], melds: Meld[]): DiscardRoute {
   return { missingSuit, shape: 'standard-or-dragon' };
 }
 
+function routeAfterListeningChoice(
+  tiles: Tile[],
+  standing: Tile[],
+  melds: Meld[],
+  listeningChoices: ReturnType<typeof canDeclareListeningByStandingDiscard>,
+): DiscardRoute {
+  const firstChoice = listeningChoices[0];
+  if (!firstChoice) {
+    return routeForTiles(tiles, melds);
+  }
+  const standingDiscard = standing.find((tile) => tileKey(tile) === firstChoice.discardKey);
+  const afterStandingDiscard = standingDiscard ? removeOneTile(tiles, standingDiscard) : tiles;
+  const baseRoute = routeForTiles(afterStandingDiscard, melds);
+  const counts = countTiles(afterStandingDiscard);
+  const hasStandard = firstChoice.winningKeys.some((key) =>
+    isCompleteStandardHand(addCount(counts, parseTileKey(key), 1), melds.length),
+  );
+  const hasDragon = firstChoice.winningKeys.some((key) =>
+    isCompleteDragonHand(addCount(counts, parseTileKey(key), 1), melds.length),
+  );
+  const shape =
+    hasStandard && hasDragon
+      ? 'standard-or-dragon'
+      : hasDragon
+        ? 'dragon'
+        : hasStandard
+          ? 'standard'
+          : baseRoute.shape;
+  return { ...baseRoute, shape };
+}
+
 function effectiveTileCount(winningKeys: Set<TileKey>, seenCounts: TileCounts): number {
   return Array.from(winningKeys).reduce(
     (sum, key) => sum + remainingCopies(parseTileKey(key), seenCounts),
@@ -152,7 +185,12 @@ export function recommendDiscards(input: DiscardRecommendationInput): DiscardRec
 
       return {
         discardKey: tileKey(discard),
-        route: routeForTiles(remainingConcealed, input.melds),
+        route: routeAfterListeningChoice(
+          remainingConcealed,
+          input.standing,
+          input.melds,
+          listeningChoices,
+        ),
         score,
         effectiveTileCount: effective,
         warningLevel: warnings.length > 0 ? 'caution' : 'normal',

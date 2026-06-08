@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import App from './App';
@@ -19,6 +19,7 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: '碰杠建议' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '副露' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '结算' })).toBeInTheDocument();
+    expect(screen.getAllByText(/标准路线|龙牌路线|标准\/龙牌路线/).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: '录手牌' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '录立牌' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '标记 B 听牌' })).toBeInTheDocument();
@@ -30,10 +31,51 @@ describe('App', () => {
 
   it('shows settlement as a dialog after a valid self-draw settlement', async () => {
     const user = userEvent.setup();
+    let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
+    game = updatePlayer(game, 'A', (player) => ({
+      ...player,
+      hasDeclaredListening: true,
+      lockedAfterListening: true,
+      concealedTiles: tilesFromKeys([
+        'wan-1',
+        'wan-2',
+        'wan-3',
+        'wan-4',
+        'wan-5',
+        'wan-6',
+        'tiao-2',
+        'tiao-3',
+        'tiao-4',
+        'tiao-7',
+        'tiao-7',
+        'tiao-7',
+        'wan-9',
+      ]),
+    }));
+    game = { ...game, phase: 'waiting-user-draw', currentActor: 'A' };
+    window.localStorage.setItem('lisi-mahjong-assistant.recent-game.v1', JSON.stringify(game));
+    render(<App />);
+    await user.click(within(screen.getByLabelText('牌面输入')).getByRole('button', { name: '九万' }));
+    await user.click(screen.getByRole('button', { name: '自摸结算' }));
+    expect(screen.getByRole('dialog', { name: '结算结果' })).toBeInTheDocument();
+  });
+
+  it('shows an error message instead of crashing for illegal self-draw settlement', async () => {
+    const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole('button', { name: /扣 bing-1 听牌/ }));
     await user.click(screen.getByRole('button', { name: '自摸结算' }));
-    expect(screen.getByRole('dialog', { name: '结算结果' })).toBeInTheDocument();
+    expect(screen.getByText(/requires the drawn tile/i)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '结算结果' })).not.toBeInTheDocument();
+  });
+
+  it('requires a visible opponent discard before discard-win settlement', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: /扣 bing-1 听牌/ }));
+    await user.click(screen.getByRole('button', { name: '点炮结算' }));
+    expect(screen.getByText('需要先记录对手弃牌后才能点炮结算。')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '结算结果' })).not.toBeInTheDocument();
   });
 
   it('switches recommendation panel to locked-hand guidance after listening', async () => {

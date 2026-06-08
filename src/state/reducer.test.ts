@@ -79,6 +79,33 @@ describe('game reducer', () => {
     expect(getPlayer(game, 'B').exposedKongCount).toBe(1);
   });
 
+  it('rejects an added kong without an existing matching pong', () => {
+    let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
+    game = updatePlayer(game, 'A', (player) => ({
+      ...player,
+      concealedTiles: tilesFromKeys(['wan-1', 'bing-1']),
+      standingTiles: tilesFromKeys(['bing-1']),
+    }));
+    expect(() => applyAction(game, { type: 'added-kong', caller: 'A', tile: makeTile('wan', 1) })).toThrow(
+      /matching pong/i,
+    );
+  });
+
+  it('consumes a user standing tile when upgrading a pong to an added kong', () => {
+    let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
+    game = updatePlayer(game, 'A', (player) => ({
+      ...player,
+      concealedTiles: tilesFromKeys(['wan-1', 'bing-1']),
+      standingTiles: tilesFromKeys(['wan-1', 'bing-1']),
+      melds: [{ type: 'pong', tile: makeTile('wan', 1), fromSeat: 'B' }],
+    }));
+    game = applyAction(game, { type: 'added-kong', caller: 'A', tile: makeTile('wan', 1) });
+    const user = getPlayer(game, 'A');
+    expect(user.standingTiles.map((tile) => `${tile.suit}-${tile.rank}`)).toEqual(['bing-1']);
+    expect(user.melds).toEqual([{ type: 'added-kong', tile: makeTile('wan', 1), fromSeat: 'B' }]);
+    expect(user.exposedKongCount).toBe(1);
+  });
+
   it('rejects normal user discard of a standing tile before listening', () => {
     let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
     game = updatePlayer(game, 'A', (player) => ({
@@ -165,17 +192,73 @@ describe('game reducer', () => {
     expect(() => applyAction(game, { type: 'win', winner: 'A' })).toThrow(/before listening/i);
   });
 
-  it('records settlement score when a listened player wins', () => {
+  it('rejects user self-draw settlement when the locked draw is not a legal win', () => {
     let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
     game = updatePlayer(game, 'A', (player) => ({
+      ...player,
+      hasDeclaredListening: true,
+      lockedAfterListening: true,
+      concealedTiles: tilesFromKeys([
+        'wan-1',
+        'wan-2',
+        'wan-3',
+        'wan-4',
+        'wan-5',
+        'wan-6',
+        'tiao-2',
+        'tiao-3',
+        'tiao-4',
+        'tiao-7',
+        'tiao-7',
+        'tiao-7',
+        'wan-9',
+      ]),
+      drawnTileAfterListening: makeTile('tiao', 5),
+    }));
+    expect(() => applyAction(game, { type: 'win', winner: 'A', winType: 'self-draw' })).toThrow(
+      /legal lisi win/i,
+    );
+  });
+
+  it('settles user self-draw only when the locked draw completes a legal win', () => {
+    let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
+    game = updatePlayer(game, 'A', (player) => ({
+      ...player,
+      hasDeclaredListening: true,
+      lockedAfterListening: true,
+      concealedTiles: tilesFromKeys([
+        'wan-1',
+        'wan-2',
+        'wan-3',
+        'wan-4',
+        'wan-5',
+        'wan-6',
+        'tiao-2',
+        'tiao-3',
+        'tiao-4',
+        'tiao-7',
+        'tiao-7',
+        'tiao-7',
+        'wan-9',
+      ]),
+      drawnTileAfterListening: makeTile('wan', 9),
+    }));
+    game = applyAction(game, { type: 'win', winner: 'A', winType: 'self-draw' });
+    expect(game.phase).toBe('settlement');
+    expect(game.settlement?.scoreDelta).toEqual({ A: 40, B: -20, C: -20 });
+  });
+
+  it('records settlement score when a listened player wins', () => {
+    let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
+    game = updatePlayer(game, 'B', (player) => ({
       ...player,
       hasDeclaredListening: true,
       exposedKongCount: 1,
       concealedKongCount: 1,
     }));
-    game = applyAction(game, { type: 'win', winner: 'A', winType: 'self-draw' });
+    game = applyAction(game, { type: 'win', winner: 'B', winType: 'self-draw' });
     expect(game.phase).toBe('settlement');
-    expect(game.settlement?.scoreDelta).toEqual({ A: 70, B: -35, C: -35 });
+    expect(game.settlement?.scoreDelta).toEqual({ A: -35, B: 70, C: -35 });
   });
 
   it('restores previous state with undo', () => {

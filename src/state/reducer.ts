@@ -15,7 +15,11 @@ import {
   type Tile,
   type TileCounts,
 } from '../domain';
-import { canDeclareListeningByStandingDiscard, normalDiscardCandidates } from '../rules/lisiRules';
+import {
+  canDeclareListeningByStandingDiscard,
+  isLegalLisiWin,
+  normalDiscardCandidates,
+} from '../rules/lisiRules';
 import { settleHand } from '../scoring/scoring';
 
 export type GameAction =
@@ -208,6 +212,29 @@ function ensureCanCall(player: PlayerState, callName: string): void {
   }
 }
 
+function assertKnownUserWinIsLegal(game: GameState, winner: PlayerState, winType: 'self-draw' | 'discard'): void {
+  if (!winner.isUser) {
+    return;
+  }
+
+  let counts = countTiles(winner.concealedTiles);
+  if (winType === 'self-draw') {
+    if (!winner.drawnTileAfterListening) {
+      throw new Error('Known user self-draw requires the drawn tile after listening.');
+    }
+    counts = addCount(counts, winner.drawnTileAfterListening, 1);
+  } else {
+    if (!game.lastDiscard) {
+      throw new Error('Known user discard win requires the last visible discard.');
+    }
+    counts = addCount(counts, game.lastDiscard.tile, 1);
+  }
+
+  if (!isLegalLisiWin({ counts, melds: winner.melds, hasDeclaredListening: true })) {
+    throw new Error('Known user hand is not a legal Lisi win.');
+  }
+}
+
 export function applyAction(game: GameState, action: GameAction): GameState {
   const withHistory = pushHistory(game);
 
@@ -322,16 +349,20 @@ export function applyAction(game: GameState, action: GameAction): GameState {
       const caller = getPlayer(withHistory, action.caller);
       ensureCanCall(caller, 'kong');
       const updated = updatePlayer(withHistory, action.caller, (player) => {
+        const hasMatchingPong = player.melds.some(
+          (meld) => meld.type === 'pong' && sameTile(meld.tile, action.tile),
+        );
+        if (!hasMatchingPong) {
+          throw new Error('Added kong requires an existing matching pong.');
+        }
+        const basePlayer = player.isUser ? removeCalledTilesFromUser(player, action.tile, 1) : player;
         const melds = player.melds.map((meld) =>
           meld.type === 'pong' && sameTile(meld.tile, action.tile)
             ? { ...meld, type: 'added-kong' as const }
             : meld,
         );
         return {
-          ...player,
-          concealedTiles: player.isUser
-            ? removeMatchingTiles(player.concealedTiles, action.tile, 1) ?? player.concealedTiles
-            : player.concealedTiles,
+          ...basePlayer,
           melds,
           exposedKongCount: player.exposedKongCount + 1,
         };
@@ -395,6 +426,7 @@ export function applyAction(game: GameState, action: GameAction): GameState {
       if (winType === 'discard' && !action.discarder) {
         throw new Error('Discard win requires a discarder.');
       }
+      assertKnownUserWinIsLegal(withHistory, winner, winType);
       const discarderHadDeclaredListening =
         action.discarderHadDeclaredListening ??
         (action.discarder ? getPlayer(withHistory, action.discarder).hasDeclaredListening : false);
