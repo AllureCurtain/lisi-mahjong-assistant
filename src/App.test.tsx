@@ -25,7 +25,7 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: '标记 B 听牌' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '无人要' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '撤销一步' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /扣 bing-1 听牌/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /扣 一饼 听牌/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '自摸结算' })).toBeInTheDocument();
   });
 
@@ -85,16 +85,16 @@ describe('App', () => {
   it('shows an error message instead of crashing for illegal self-draw settlement', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: /扣 bing-1 听牌/ }));
+    await user.click(screen.getByRole('button', { name: /扣 一饼 听牌/ }));
     await user.click(screen.getByRole('button', { name: '自摸结算' }));
-    expect(screen.getByText(/requires the drawn tile/i)).toBeInTheDocument();
+    expect(screen.getByText(/自摸结算前需先记录摸到的牌/)).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: '结算结果' })).not.toBeInTheDocument();
   });
 
   it('requires a visible opponent discard before discard-win settlement', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: /扣 bing-1 听牌/ }));
+    await user.click(screen.getByRole('button', { name: /扣 一饼 听牌/ }));
     await user.click(screen.getByRole('button', { name: '点炮结算' }));
     expect(screen.getByText('需要先记录对手弃牌后才能点炮结算。')).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: '结算结果' })).not.toBeInTheDocument();
@@ -103,7 +103,7 @@ describe('App', () => {
   it('switches recommendation panel to locked-hand guidance after listening', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: /扣 bing-1 听牌/ }));
+    await user.click(screen.getByRole('button', { name: /扣 一饼 听牌/ }));
     expect(screen.getByText(/锁手后不再显示手牌优化建议/)).toBeInTheDocument();
   });
 
@@ -119,7 +119,7 @@ describe('App', () => {
     game = { ...game, phase: 'user-discard-choice', currentActor: 'A' };
     window.localStorage.setItem('lisi-mahjong-assistant.recent-game.v1', JSON.stringify(game));
     render(<App />);
-    expect(screen.getByText(/必须打 tiao-5/)).toBeInTheDocument();
+    expect(screen.getByText(/必须打 五条/)).toBeInTheDocument();
   });
 
   it('records a user kong replacement draw from the tail-draw phase', async () => {
@@ -148,7 +148,7 @@ describe('App', () => {
     }));
     window.localStorage.setItem('lisi-mahjong-assistant.recent-game.v1', JSON.stringify(game));
     render(<App />);
-    await user.click(screen.getByRole('button', { name: /暗杠 wan-1/ }));
+    await user.click(screen.getByRole('button', { name: /暗杠 一万/ }));
     expect(screen.getByText('已记录暗杠，等待杠后补牌。')).toBeInTheDocument();
     expect(screen.getByText('阶段：waiting-tail-draw-discard')).toBeInTheDocument();
   });
@@ -164,7 +164,7 @@ describe('App', () => {
     }));
     window.localStorage.setItem('lisi-mahjong-assistant.recent-game.v1', JSON.stringify(game));
     render(<App />);
-    await user.click(screen.getByRole('button', { name: /补杠 wan-1/ }));
+    await user.click(screen.getByRole('button', { name: /补杠 一万/ }));
     expect(screen.getByText('已记录补杠，等待杠后补牌。')).toBeInTheDocument();
     expect(screen.getByText('阶段：waiting-tail-draw-discard')).toBeInTheDocument();
   });

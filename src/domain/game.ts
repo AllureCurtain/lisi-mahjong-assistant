@@ -32,11 +32,19 @@ export interface GameState {
   settlement?: SettlementState;
   knownSeenCounts: TileCounts;
   actionHistory: GameState[];
+  cumulativeScores: Record<Seat, number>;
+  handNumber: number;
+  forcedEvents: string[];
 }
 
 export interface CreateInitialGameInput {
   userSeat: Seat;
   dealerSeat: Seat;
+}
+
+export function nextSeatCounterclockwise(seat: Seat): Seat {
+  const index = SEATS.indexOf(seat);
+  return SEATS[(index + 1) % SEATS.length];
 }
 
 export function createInitialGame(input: CreateInitialGameInput): GameState {
@@ -54,6 +62,43 @@ export function createInitialGame(input: CreateInitialGameInput): GameState {
     phase: 'setup',
     knownSeenCounts: {},
     actionHistory: [],
+    cumulativeScores: { A: 0, B: 0, C: 0 },
+    handNumber: 1,
+    forcedEvents: [],
+  };
+}
+
+export function emptyCumulativeScores(): Record<Seat, number> {
+  return { A: 0, B: 0, C: 0 };
+}
+
+export function normalizeGameState(raw: GameState): GameState {
+  return {
+    ...raw,
+    cumulativeScores: raw.cumulativeScores ?? emptyCumulativeScores(),
+    handNumber: raw.handNumber ?? 1,
+    forcedEvents: raw.forcedEvents ?? [],
+  };
+}
+
+export function dealerForNextHand(previousDealer: Seat, winner?: Seat): Seat {
+  if (winner && winner === previousDealer) {
+    return previousDealer;
+  }
+  return nextSeatCounterclockwise(previousDealer);
+}
+
+export function createNextHand(previous: GameState): GameState {
+  const previousDealer = previous.players.find((player) => player.isDealer)?.seat ?? 'A';
+  const userSeat = previous.players.find((player) => player.isUser)?.seat ?? 'A';
+  const next = createInitialGame({
+    userSeat,
+    dealerSeat: dealerForNextHand(previousDealer, previous.settlement?.winner),
+  });
+  return {
+    ...next,
+    cumulativeScores: previous.cumulativeScores ?? emptyCumulativeScores(),
+    handNumber: (previous.handNumber ?? 1) + 1,
   };
 }
 

@@ -80,7 +80,7 @@ export function SetupPanel({
           ))}
       </div>
       <button className="secondary-action" onClick={onReset} type="button">
-        重开本局
+        清零重开
       </button>
     </section>
   );

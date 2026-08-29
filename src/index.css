@@ -462,3 +462,46 @@ select {
     top: 16px;
   }
 }
+
+.hand-number {
+  margin-inline-start: 8px;
+  color: #5a6472;
+  font-size: 0.9rem;
+}
+
+.player-score {
+  margin-inline-start: 4px;
+  font-variant-numeric: tabular-nums;
+  color: #2c5f2d;
+  font-weight: 600;
+}
+
+.forced-hint {
+  border: 1px solid #d9a441;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fdf6e3;
+}
+
+.forced-hint .warning-text {
+  margin-block: 0 8px;
+}
+
+.forced-events {
+  margin-block-start: 8px;
+}
+
+.forced-events h3 {
+  margin-block: 0 4px;
+  font-size: 0.9rem;
+}
+
+.forced-events ul {
+  margin: 0;
+  padding-inline-start: 18px;
+}
+
+.forced-events li {
+  font-size: 0.85rem;
+  color: #8a4b08;
+}

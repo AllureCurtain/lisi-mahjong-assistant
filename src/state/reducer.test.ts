@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialGame, getPlayer, makeTile, tilesFromKeys, updatePlayer } from '../domain';
+import {
+  createInitialGame,
+  createNextHand,
+  getPlayer,
+  makeTile,
+  tilesFromKeys,
+  updatePlayer,
+} from '../domain';
 import { applyAction, nextSeatCounterclockwise, recomputeKnownSeenCounts, undo } from './reducer';
 
 describe('game reducer', () => {
@@ -28,7 +35,7 @@ describe('game reducer', () => {
     game = applyAction(game, { type: 'setup-user-tile', tile: makeTile('wan', 1), standing: false });
     expect(() =>
       applyAction(game, { type: 'setup-user-tile', tile: makeTile('wan', 1), standing: false }),
-    ).toThrow(/exceed four/i);
+    ).toThrow(/超过四张/);
   });
 
   it('marks an opponent as listening without knowing their face-down standing tile', () => {
@@ -87,7 +94,7 @@ describe('game reducer', () => {
       standingTiles: tilesFromKeys(['bing-1']),
     }));
     expect(() => applyAction(game, { type: 'added-kong', caller: 'A', tile: makeTile('wan', 1) })).toThrow(
-      /matching pong/i,
+      /补杠需要/,
     );
   });
 
@@ -115,7 +122,7 @@ describe('game reducer', () => {
     }));
     game = { ...game, phase: 'waiting-visible-discard' };
     expect(() => applyAction(game, { type: 'visible-discard', tile: makeTile('wan', 2) })).toThrow(
-      /standing tile/i,
+      /立牌不能普通打出/,
     );
   });
 
@@ -155,7 +162,7 @@ describe('game reducer', () => {
     game = updatePlayer(game, 'B', (player) => ({ ...player, hasDeclaredListening: true }));
     game = { ...game, phase: 'waiting-visible-discard' };
     game = applyAction(game, { type: 'visible-discard', tile: makeTile('wan', 3) });
-    expect(() => applyAction(game, { type: 'exposed-kong', caller: 'B' })).toThrow(/after listening/i);
+    expect(() => applyAction(game, { type: 'exposed-kong', caller: 'B' })).toThrow(/听牌后不能再杠/);
   });
 
   it('rejects a known tile count above four', () => {
@@ -168,7 +175,7 @@ describe('game reducer', () => {
     }
     game = { ...game, currentActor: 'B', phase: 'waiting-visible-discard' };
     expect(() => applyAction(game, { type: 'visible-discard', tile: makeTile('bing', 8) })).toThrow(
-      /exceed four/i,
+      /超过四张/,
     );
   });
 
@@ -181,7 +188,7 @@ describe('game reducer', () => {
     }));
     game = applyAction(game, { type: 'user-draw', tile: makeTile('tiao', 9) });
     expect(() => applyAction(game, { type: 'visible-discard', tile: makeTile('tiao', 8) })).toThrow(
-      /drawn tile/i,
+      /刚摸的那张牌/,
     );
     const discarded = applyAction(game, { type: 'visible-discard', tile: makeTile('tiao', 9) });
     expect(getPlayer(discarded, 'A').drawnTileAfterListening).toBeUndefined();
@@ -189,7 +196,7 @@ describe('game reducer', () => {
 
   it('rejects win before listening', () => {
     const game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
-    expect(() => applyAction(game, { type: 'win', winner: 'A' })).toThrow(/before listening/i);
+    expect(() => applyAction(game, { type: 'win', winner: 'A' })).toThrow(/先听牌才能胡/);
   });
 
   it('rejects user self-draw settlement when the locked draw is not a legal win', () => {
@@ -216,7 +223,7 @@ describe('game reducer', () => {
       drawnTileAfterListening: makeTile('tiao', 5),
     }));
     expect(() => applyAction(game, { type: 'win', winner: 'A', winType: 'self-draw' })).toThrow(
-      /legal lisi win/i,
+      /合法的立四胡牌/,
     );
   });
 
@@ -269,5 +276,72 @@ describe('game reducer', () => {
     expect(restored.currentActor).toBe('A');
     expect(restored.phase).toBe('waiting-visible-discard');
     expect(restored.lastDiscard).toBeUndefined();
+  });
+
+  it('marks a forced standing-tile discard in forced events history', () => {
+    let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
+    game = updatePlayer(game, 'A', (player) => ({
+      ...player,
+      concealedTiles: tilesFromKeys(['wan-1', 'wan-2', 'tiao-3']),
+      standingTiles: tilesFromKeys(['wan-2']),
+    }));
+    game = { ...game, phase: 'waiting-visible-discard' };
+    expect(() => applyAction(game, { type: 'visible-discard', tile: makeTile('wan', 2) })).toThrow(/立牌/);
+    const forced = applyAction(game, { type: 'visible-discard', tile: makeTile('wan', 2) }, { force: true });
+    expect(getPlayer(forced, 'A').discards.map((tile) => `${tile.suit}-${tile.rank}`)).toEqual(['wan-2']);
+    expect(forced.forcedEvents).toHaveLength(1);
+    expect(forced.forcedEvents[0]).toContain('强制记录');
+    expect(forced.forcedEvents[0]).toContain('立牌');
+    expect(undo(forced).forcedEvents).toHaveLength(0);
+  });
+
+  it('forces a win before listening and still settles the hand', () => {
+    let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
+    game = updatePlayer(game, 'B', (player) => ({ ...player, hasDeclaredListening: true }));
+    game = applyAction(game, { type: 'win', winner: 'B', winType: 'self-draw' }, { force: false });
+    expect(game.phase).toBe('settlement');
+    expect(game.forcedEvents).toHaveLength(0);
+
+    const fresh = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
+    const forcedWin = applyAction(fresh, { type: 'win', winner: 'B', winType: 'self-draw' }, { force: true });
+    expect(forcedWin.phase).toBe('settlement');
+    expect(forcedWin.settlement?.scoreDelta).toEqual({ A: -20, B: 40, C: -20 });
+    expect(forcedWin.forcedEvents[0]).toContain('先听牌');
+  });
+
+  it('keeps hard errors unrecoverable even with force', () => {
+    const game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
+    expect(() =>
+      applyAction(game, { type: 'added-kong', caller: 'A', tile: makeTile('wan', 1) }, { force: true }),
+    ).toThrow(/补杠需要/);
+  });
+
+  it('accumulates settlement scores into cumulative scores', () => {
+    let game = createInitialGame({ userSeat: 'A', dealerSeat: 'A' });
+    game = updatePlayer(game, 'B', (player) => ({ ...player, hasDeclaredListening: true }));
+    game = applyAction(game, { type: 'win', winner: 'B', winType: 'self-draw' });
+    expect(game.cumulativeScores).toEqual({ A: -20, B: 40, C: -20 });
+
+    const second = createNextHand(game);
+    expect(second.handNumber).toBe(2);
+    expect(second.cumulativeScores).toEqual({ A: -20, B: 40, C: -20 });
+    expect(second.phase).toBe('setup');
+    const dealerSecond = second.players.find((player) => player.isDealer);
+    expect(dealerSecond?.seat).toBe('B');
+
+    const afterUndo = undo(game);
+    expect(afterUndo.cumulativeScores).toEqual({ A: 0, B: 0, C: 0 });
+  });
+
+  it('keeps the dealer in seat after a dealer win and rotates otherwise', () => {
+    let game = createInitialGame({ userSeat: 'A', dealerSeat: 'B' });
+    game = updatePlayer(game, 'B', (player) => ({ ...player, hasDeclaredListening: true }));
+    game = applyAction(game, { type: 'win', winner: 'B', winType: 'self-draw' });
+    const continued = createNextHand(game);
+    expect(continued.players.find((player) => player.isDealer)?.seat).toBe('B');
+    expect(continued.handNumber).toBe(2);
+
+    const rotated = createNextHand({ ...game, settlement: { ...game.settlement!, winner: 'A' } });
+    expect(rotated.players.find((player) => player.isDealer)?.seat).toBe('C');
   });
 });

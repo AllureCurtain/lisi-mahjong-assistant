@@ -3,8 +3,10 @@ import {
   SEATS,
   countTiles,
   createInitialGame,
+  createNextHand,
   getPlayer,
   getUserPlayer,
+  normalizeGameState,
   parseTileKey,
   tilesFromKeys,
   updatePlayer,
@@ -20,7 +22,12 @@ import {
   type SelfKongRecommendation,
 } from './recommendation/recommend';
 import { canDeclareListeningByStandingDiscard } from './rules/lisiRules';
-import { applyAction, recomputeKnownSeenCounts, undo } from './state/reducer';
+import {
+  applyAction,
+  recomputeKnownSeenCounts,
+  undo,
+  type GameAction,
+} from './state/reducer';
 import { CallAdvicePanel } from './ui/CallAdvicePanel';
 import { DiscardRivers } from './ui/DiscardRivers';
 import { HandView } from './ui/HandView';
@@ -74,7 +81,7 @@ function loadInitialGame(): GameState {
   try {
     const saved = window.localStorage.getItem(STORAGE_KEY);
     if (saved) {
-      return JSON.parse(saved) as GameState;
+      return normalizeGameState(JSON.parse(saved) as GameState);
     }
   } catch {
     window.localStorage.removeItem(STORAGE_KEY);
@@ -101,6 +108,9 @@ export default function App() {
   const [message, setMessage] = useState('准备记录本局。');
   const [tileEntryMode, setTileEntryMode] = useState<'discard' | 'hand' | 'standing'>('discard');
   const [activeWorkspace, setActiveWorkspace] = useState<MobileWorkspace>('record');
+  const [pendingForced, setPendingForced] = useState<{ action: GameAction; successMessage: string } | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(game));
@@ -177,13 +187,19 @@ export default function App() {
     ],
   );
 
-  function applyUiAction(action: Parameters<typeof applyAction>[1], successMessage: string) {
+  function applyUiAction(
+    action: GameAction,
+    successMessage: string,
+    options?: { force?: boolean },
+  ) {
     try {
-      const nextGame = applyAction(game, action);
+      const nextGame = applyAction(game, action, options);
       dispatch({ type: 'game', game: nextGame });
-      setMessage(successMessage);
+      setMessage(options?.force ? `已强制记录。${successMessage}` : successMessage);
+      setPendingForced(undefined);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '动作无法记录。');
+      setPendingForced({ action, successMessage });
+      setMessage(error instanceof Error ? `记录被拒绝：${error.message}` : '动作无法记录。');
     }
   }
 
@@ -241,13 +257,19 @@ export default function App() {
 
   function handleSeatChange(userSeat: Seat, dealerSeat: Seat) {
     dispatch({ type: 'game', game: createInitialGame({ userSeat, dealerSeat }) });
-    setMessage('已更新座位设置。');
+    setMessage('已更新座位设置，累计分已清零。');
+  }
+
+  function handleNextHand() {
+    const next = createNextHand(game);
+    dispatch({ type: 'game', game: next });
+    setMessage(`已开始第 ${next.handNumber} 局，请录入新一局的手牌。`);
   }
 
   function handleReset() {
     const next = createDemoGame();
     dispatch({ type: 'game', game: next });
-    setMessage('已重开本局。');
+    setMessage('已清零并重开本局。');
   }
 
   return (
@@ -337,6 +359,7 @@ export default function App() {
           <CallAdvicePanel callAdvice={callAdvice} selfKongs={selfKongs} onSelfKong={handleSelfKong} />
           <SettlementPanel
             scoreDelta={game.settlement?.scoreDelta}
+            cumulativeScores={game.cumulativeScores}
             onSelfDraw={() => applyUiAction({ type: 'win', winner: user.seat, winType: 'self-draw' }, '已按自摸结算。')}
             onDiscardWin={() => handleDiscardWin('已按点炮结算。')}
           />
@@ -344,6 +367,28 @@ export default function App() {
         <section className="message-panel" aria-label="操作消息">
           <h2>消息</h2>
           <p>{message}</p>
+          {pendingForced ? (
+            <div className="forced-hint">
+              <p className="warning-text">现实牌局若已发生且确认无误，可以强制记入历史。</p>
+              <button
+                className="secondary-action"
+                onClick={() => applyUiAction(pendingForced.action, pendingForced.successMessage, { force: true })}
+                type="button"
+              >
+                强制记录
+              </button>
+            </div>
+          ) : null}
+          {(game.forcedEvents ?? []).length > 0 ? (
+            <div className="forced-events">
+              <h3>强制记录历史</h3>
+              <ul>
+                {(game.forcedEvents ?? []).slice(-3).map((event, index) => (
+                  <li key={`${event}-${index}`}>{event}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <p className="muted">阶段：{game.phase}</p>
         </section>
       </aside>
@@ -359,8 +404,11 @@ export default function App() {
                 </span>
               ))}
             </div>
+            <button className="secondary-action" onClick={handleNextHand} type="button">
+              开始下一局（累计 {SEATS.map((seat) => `${seat} ${game.cumulativeScores[seat] ?? 0}`).join(' / ')}）
+            </button>
             <button className="secondary-action" onClick={handleReset} type="button">
-              新一局
+              清零重开
             </button>
           </section>
         </div>

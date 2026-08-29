@@ -2,11 +2,21 @@ import { SEATS, type Seat } from '../domain';
 
 export interface SettlementPanelProps {
   scoreDelta?: Record<Seat, number>;
+  cumulativeScores?: Record<Seat, number>;
   onSelfDraw: () => void;
   onDiscardWin: () => void;
 }
 
-export function SettlementPanel({ scoreDelta, onSelfDraw, onDiscardWin }: SettlementPanelProps) {
+function signedScore(score: number): string {
+  return `${score > 0 ? '+' : ''}${score}`;
+}
+
+export function SettlementPanel({
+  scoreDelta,
+  cumulativeScores,
+  onSelfDraw,
+  onDiscardWin,
+}: SettlementPanelProps) {
   return (
     <section className="settlement-panel" aria-label="结算">
       <h2>结算</h2>
@@ -19,14 +29,20 @@ export function SettlementPanel({ scoreDelta, onSelfDraw, onDiscardWin }: Settle
         </button>
       </div>
       {scoreDelta ? (
-        <div className="score-grid">
-          {SEATS.map((seat) => (
-            <span key={seat}>
-              {seat}: {scoreDelta[seat] > 0 ? '+' : ''}
-              {scoreDelta[seat]}
-            </span>
-          ))}
-        </div>
+        <>
+          <div className="score-grid">
+            {SEATS.map((seat) => (
+              <span key={seat}>
+                {seat}: {signedScore(scoreDelta[seat])}
+              </span>
+            ))}
+          </div>
+          {cumulativeScores ? (
+            <p className="muted">
+              累计：{SEATS.map((seat) => `${seat} ${signedScore(cumulativeScores[seat] ?? 0)}`).join('，')}
+            </p>
+          ) : null}
+        </>
       ) : (
         <p className="muted">胡牌后显示每家输赢分。</p>
       )}
