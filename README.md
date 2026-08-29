@@ -33,7 +33,10 @@ pnpm build
 - Listening validation and locked-hand behavior.
 - Standard and dragon hand checks.
 - Family scoring rules.
-- Discard, pong, and kong recommendations.
+- Discard, pong, and kong recommendations with dynamic missing-suit route scoring.
+- Chinese-language advice, warnings, and tile names across the UI.
+- Forced-record recovery for real-world mistakes, marked in history.
+- Cumulative multi-hand scores with dealer continuation and rotation.
 - Undo for recorded actions.
 - Recent game persistence in `localStorage`.
 
