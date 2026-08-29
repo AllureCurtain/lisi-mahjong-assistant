@@ -1,4 +1,4 @@
-import type { GameState } from '../domain';
+import { MELD_TYPE_CHINESE, type GameState } from '../domain';
 import { tileChineseLabel } from './TileButton';
 
 export interface MeldAreaProps {
@@ -17,7 +17,7 @@ export function MeldArea({ game }: MeldAreaProps) {
         <div className="meld-list">
           {melds.map((meld) => (
             <span className="meld-item" key={`${meld.owner}-${meld.type}-${meld.index}`}>
-              {meld.owner} {meld.type} {tileChineseLabel(meld.tile)}
+              {meld.owner} {MELD_TYPE_CHINESE[meld.type]} {tileChineseLabel(meld.tile)}
             </span>
           ))}
         </div>

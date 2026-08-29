@@ -12,6 +12,32 @@ export type TileCounts = Partial<Record<TileKey, number>>;
 export const SUITS: Suit[] = ['wan', 'tiao', 'bing'];
 export const RANKS: Rank[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
+export const SUIT_CHINESE: Record<Suit, string> = {
+  wan: '万',
+  tiao: '条',
+  bing: '饼',
+};
+
+const RANK_CHINESE: Record<Rank, string> = {
+  1: '一',
+  2: '二',
+  3: '三',
+  4: '四',
+  5: '五',
+  6: '六',
+  7: '七',
+  8: '八',
+  9: '九',
+};
+
+export function tileChineseName(tile: Tile): string {
+  return `${RANK_CHINESE[tile.rank]}${SUIT_CHINESE[tile.suit]}`;
+}
+
+export function tileKeyChineseName(key: TileKey): string {
+  return tileChineseName(parseTileKey(key));
+}
+
 export const ALL_TILES: Tile[] = SUITS.flatMap((suit) =>
   RANKS.map((rank) => ({ suit, rank })),
 );

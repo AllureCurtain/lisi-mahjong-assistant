@@ -1,4 +1,5 @@
 import type { ListeningChoice } from '../rules/lisiRules';
+import { tileKeyChineseLabel } from './tileLabel';
 
 export interface ListeningPanelProps {
   choices: ListeningChoice[];
@@ -13,7 +14,8 @@ export function ListeningPanel({ choices, onDeclare }: ListeningPanelProps) {
         <div className="action-list">
           {choices.map((choice) => (
             <button key={choice.discardKey} onClick={() => onDeclare(choice)} type="button">
-              扣 {choice.discardKey} 听牌，胡 {choice.winningKeys.join('、')}
+              扣 {tileKeyChineseLabel(choice.discardKey)} 听牌，胡{' '}
+              {choice.winningKeys.map(tileKeyChineseLabel).join('、')}
             </button>
           ))}
         </div>

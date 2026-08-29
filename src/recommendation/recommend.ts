@@ -1,11 +1,13 @@
 import {
   SUITS,
+  SUIT_CHINESE,
   addCount,
   countTiles,
   keysFromTiles,
   parseTileKey,
   remainingCopies,
   tileCount,
+  tileChineseName,
   tileKey,
   type Meld,
   type Suit,
@@ -15,16 +17,22 @@ import {
 } from '../domain';
 import {
   canDeclareListeningByStandingDiscard,
-  hasExactlyTwoSuits,
+  isLegalLisiWin,
   normalDiscardCandidates,
+  type ListeningChoice,
 } from '../rules/lisiRules';
-import { isLegalLisiWin } from '../rules/lisiRules';
 import { isCompleteDragonHand, isCompleteStandardHand } from '../rules/handEvaluator';
 
 export interface DiscardRoute {
   missingSuit: Suit;
   shape: 'standard' | 'dragon' | 'standard-or-dragon';
+  listeningChoiceCount: number;
+  effectiveTileCount: number;
+  winningKeyCount: number;
+  feasible: boolean;
 }
+
+export type ListeningDistance = 0 | 1 | 2 | 3;
 
 export interface DiscardRecommendationInput {
   concealed: Tile[];
@@ -37,6 +45,7 @@ export interface DiscardRecommendationInput {
 export interface DiscardRecommendation {
   discardKey: TileKey;
   route: DiscardRoute;
+  distanceToListening: ListeningDistance;
   score: number;
   effectiveTileCount: number;
   warningLevel: 'normal' | 'caution';
@@ -101,43 +110,6 @@ function removeOneTile(tiles: Tile[], target: Tile): Tile[] {
   });
 }
 
-function routeForTiles(tiles: Tile[], melds: Meld[]): DiscardRoute {
-  const suits = new Set<Suit>([...tiles.map((tile) => tile.suit), ...melds.map((meld) => meld.tile.suit)]);
-  const missingSuit = SUITS.find((suit) => !suits.has(suit)) ?? SUITS[0];
-  return { missingSuit, shape: 'standard-or-dragon' };
-}
-
-function routeAfterListeningChoice(
-  tiles: Tile[],
-  standing: Tile[],
-  melds: Meld[],
-  listeningChoices: ReturnType<typeof canDeclareListeningByStandingDiscard>,
-): DiscardRoute {
-  const firstChoice = listeningChoices[0];
-  if (!firstChoice) {
-    return routeForTiles(tiles, melds);
-  }
-  const standingDiscard = standing.find((tile) => tileKey(tile) === firstChoice.discardKey);
-  const afterStandingDiscard = standingDiscard ? removeOneTile(tiles, standingDiscard) : tiles;
-  const baseRoute = routeForTiles(afterStandingDiscard, melds);
-  const counts = countTiles(afterStandingDiscard);
-  const hasStandard = firstChoice.winningKeys.some((key) =>
-    isCompleteStandardHand(addCount(counts, parseTileKey(key), 1), melds.length),
-  );
-  const hasDragon = firstChoice.winningKeys.some((key) =>
-    isCompleteDragonHand(addCount(counts, parseTileKey(key), 1), melds.length),
-  );
-  const shape =
-    hasStandard && hasDragon
-      ? 'standard-or-dragon'
-      : hasDragon
-        ? 'dragon'
-        : hasStandard
-          ? 'standard'
-          : baseRoute.shape;
-  return { ...baseRoute, shape };
-}
-
 function effectiveTileCount(winningKeys: Set<TileKey>, seenCounts: TileCounts): number {
   return Array.from(winningKeys).reduce(
     (sum, key) => sum + remainingCopies(parseTileKey(key), seenCounts),
@@ -147,6 +119,173 @@ function effectiveTileCount(winningKeys: Set<TileKey>, seenCounts: TileCounts): 
 
 function uniqueTiles(tiles: Tile[]): Tile[] {
   return Array.from(new Set(keysFromTiles(tiles))).map((key) => parseTileKey(key));
+}
+
+function suitsOf(tiles: Tile[], melds: Meld[]): Set<Suit> {
+  return new Set<Suit>([...tiles.map((tile) => tile.suit), ...melds.map((meld) => meld.tile.suit)]);
+}
+
+function routeShapeForChoice(
+  eventualCounts: TileCounts,
+  meldGroupCount: number,
+  winningKeys: TileKey[],
+): DiscardRoute['shape'] {
+  let hasStandard = false;
+  let hasDragon = false;
+  for (const key of winningKeys.slice(0, 12)) {
+    const withWin = addCount(eventualCounts, parseTileKey(key), 1);
+    if (isCompleteStandardHand(withWin, meldGroupCount)) {
+      hasStandard = true;
+    }
+    if (isCompleteDragonHand(withWin, meldGroupCount)) {
+      hasDragon = true;
+    }
+  }
+  if (hasStandard && hasDragon) {
+    return 'standard-or-dragon';
+  }
+  if (hasDragon) {
+    return 'dragon';
+  }
+  if (hasStandard) {
+    return 'standard';
+  }
+  return 'standard-or-dragon';
+}
+
+function infeasibleRoute(missingSuit: Suit): DiscardRoute {
+  return {
+    missingSuit,
+    shape: 'standard-or-dragon',
+    listeningChoiceCount: 0,
+    effectiveTileCount: 0,
+    winningKeyCount: 0,
+    feasible: false,
+  };
+}
+
+function evaluateRoutes(
+  remainingConcealed: Tile[],
+  standing: Tile[],
+  melds: Meld[],
+  listeningChoices: ListeningChoice[],
+  seenCounts: TileCounts,
+): DiscardRoute[] {
+  const meldGroupCount = melds.length;
+
+  // The eventual winning hand excludes the standing tile that will be
+  // discarded face-down when listening is declared.
+  const eventualHands: Tile[][] =
+    listeningChoices.length > 0
+      ? listeningChoices.map((choice) => removeOneTile(remainingConcealed, parseTileKey(choice.discardKey)))
+      : standing.length > 0
+        ? uniqueTiles(standing)
+            .map((standingTile) => removeOneTile(remainingConcealed, standingTile))
+            .filter((hand): hand is Tile[] => hand !== undefined)
+        : [remainingConcealed];
+  const fallbackHands = eventualHands.length > 0 ? eventualHands : [remainingConcealed];
+
+  return SUITS.map((missingSuit) => {
+    const allowedSuits = new Set<Suit>(SUITS.filter((suit) => suit !== missingSuit));
+
+    if (listeningChoices.length === 0) {
+      const feasible = fallbackHands.some((hand) => {
+        const used = suitsOf(hand, melds);
+        return Array.from(used).every((suit) => allowedSuits.has(suit));
+      });
+      if (!feasible) {
+        return infeasibleRoute(missingSuit);
+      }
+      return {
+        missingSuit,
+        shape: 'standard-or-dragon' as const,
+        listeningChoiceCount: 0,
+        effectiveTileCount: 0,
+        winningKeyCount: 0,
+        feasible: true,
+      };
+    }
+
+    const compatibleChoices = listeningChoices
+      .map((choice, index) => ({ choice, eventualHand: fallbackHands[index] }))
+      .filter(({ eventualHand }) => {
+        const used = suitsOf(eventualHand, melds);
+        return Array.from(used).every((suit) => allowedSuits.has(suit));
+      });
+
+    if (compatibleChoices.length === 0) {
+      return infeasibleRoute(missingSuit);
+    }
+
+    const winningKeys = Array.from(
+      new Set(
+        compatibleChoices
+          .flatMap(({ choice }) => choice.winningKeys)
+          .filter((key) => allowedSuits.has(parseTileKey(key).suit)),
+      ),
+    );
+    const effective = effectiveTileCount(new Set(winningKeys), seenCounts);
+    const shape = routeShapeForChoice(
+      countTiles(compatibleChoices[0].eventualHand),
+      meldGroupCount,
+      winningKeys,
+    );
+
+    return {
+      missingSuit,
+      shape,
+      listeningChoiceCount: compatibleChoices.length,
+      effectiveTileCount: effective,
+      winningKeyCount: winningKeys.length,
+      feasible: true,
+    } satisfies DiscardRoute;
+  });
+}
+
+function bestRoute(routes: DiscardRoute[]): DiscardRoute | undefined {
+  const feasible = routes.filter((route) => route.feasible);
+  if (feasible.length === 0) {
+    return undefined;
+  }
+  return [...feasible].sort(
+    (a, b) =>
+      b.listeningChoiceCount - a.listeningChoiceCount ||
+      b.effectiveTileCount - a.effectiveTileCount ||
+      SUITS.indexOf(a.missingSuit) - SUITS.indexOf(b.missingSuit),
+  )[0];
+}
+
+export function distanceToListening(
+  concealed: Tile[],
+  standing: Tile[],
+  melds: Meld[],
+): ListeningDistance {
+  if (standing.length === 0) {
+    return 3;
+  }
+  if (canDeclareListeningByStandingDiscard({ concealed, standing, melds }).length > 0) {
+    return 0;
+  }
+  for (const tile of uniqueTiles(concealed)) {
+    const after = removeOneTile(concealed, tile);
+    if (canDeclareListeningByStandingDiscard({ concealed: after, standing, melds }).length > 0) {
+      return 1;
+    }
+  }
+  return 2;
+}
+
+function distanceReason(distance: ListeningDistance): string {
+  if (distance === 0) {
+    return '打这张后即可扣立牌听牌';
+  }
+  if (distance === 1) {
+    return '再进张调整后即可扣听';
+  }
+  if (distance === 2) {
+    return '距听牌还有一段距离';
+  }
+  return '已无立牌，本局无法听牌';
 }
 
 export function recommendDiscards(input: DiscardRecommendationInput): DiscardRecommendation[] {
@@ -160,47 +299,77 @@ export function recommendDiscards(input: DiscardRecommendationInput): DiscardRec
         standing: input.standing,
         melds: input.melds,
       });
-      const winningKeys = new Set(listeningChoices.flatMap((choice) => choice.winningKeys));
-      const effective = effectiveTileCount(winningKeys, input.seenCounts);
+      const routes = evaluateRoutes(
+        remainingConcealed,
+        input.standing,
+        input.melds,
+        listeningChoices,
+        input.seenCounts,
+      );
+      const route = bestRoute(routes);
+      const distance = distanceToListening(remainingConcealed, input.standing, input.melds);
+
       const warnings: string[] = [];
       if (input.opponentsListening > 0) {
-        warnings.push(`${input.opponentsListening} opponent listening risk`);
+        warnings.push(`${input.opponentsListening} 家已听牌，出牌需防点炮`);
       }
       if (listeningChoices.length === 0) {
-        warnings.push('no immediate legal listening path');
+        warnings.push('当前没有直接扣听的合法路线');
       }
-      if (winningKeys.size > 0 && effective === 0) {
-        warnings.push('winning tiles appear exhausted in known tiles');
+      if (route && route.winningKeyCount > 0 && route.effectiveTileCount === 0) {
+        warnings.push('胡牌张在已知牌中已耗尽');
+      }
+      if (!route) {
+        warnings.push('三门花色齐全，缺门路线无法成立');
+      }
+      if (input.standing.length === 0) {
+        warnings.push('已无立牌，本局无法听牌或胡牌');
       }
 
-      const keepsTwoSuitRoute =
-        hasExactlyTwoSuits(remainingConcealed, input.melds) || listeningChoices.length > 0;
-      const riskPenalty = input.opponentsListening * 2;
+      const routeScore = route
+        ? route.listeningChoiceCount * 10 + route.effectiveTileCount
+        : 0;
+      const distanceBonus = distance === 0 ? 6 : distance === 1 ? 2 : distance === 2 ? -4 : -30;
       const score =
-        listeningChoices.length * 10 +
-        effective +
-        (keepsTwoSuitRoute ? 2 : -5) +
+        routeScore +
+        distanceBonus +
         (input.standing.length > 0 ? 2 : -10) -
-        riskPenalty;
+        (route ? 0 : 20) -
+        input.opponentsListening * 2;
+
+      const routeReasons = route
+        ? [
+            `缺${SUIT_CHINESE[route.missingSuit]}路线（${
+              route.listeningChoiceCount > 0
+                ? `${route.listeningChoiceCount} 种扣听选择`
+                : '暂无直接扣听选择'
+            }）`,
+            `${route.effectiveTileCount} 张有效听牌余张`,
+          ]
+        : ['没有可用的缺门路线'];
+      const reasons = [
+        input.standing.length > 0 ? '立牌保留，仍可扣听' : '已无立牌，无法再听牌',
+        ...routeReasons,
+        distanceReason(distance),
+      ];
+
+      const fallbackRoute: DiscardRoute = {
+        missingSuit: SUITS[0],
+        shape: 'standard-or-dragon',
+        listeningChoiceCount: 0,
+        effectiveTileCount: 0,
+        winningKeyCount: 0,
+        feasible: false,
+      };
 
       return {
         discardKey: tileKey(discard),
-        route: routeAfterListeningChoice(
-          remainingConcealed,
-          input.standing,
-          input.melds,
-          listeningChoices,
-        ),
+        route: route ?? fallbackRoute,
+        distanceToListening: distance,
         score,
-        effectiveTileCount: effective,
+        effectiveTileCount: route?.effectiveTileCount ?? 0,
         warningLevel: warnings.length > 0 ? 'caution' : 'normal',
-        reasons: [
-          input.standing.length > 0
-            ? 'standing tile remains available for listening'
-            : 'no standing tile remains',
-          `${listeningChoices.length} listening choices`,
-          `${effective} effective known-remaining tiles`,
-        ],
+        reasons,
         warnings,
       } satisfies DiscardRecommendation;
     })
@@ -217,8 +386,8 @@ function callAdvice(
       kind,
       judgement: 'not-recommended',
       score: -100,
-      reasons: ['hand is locked after listening'],
-      warnings: ['cannot call after listening'],
+      reasons: ['听牌后手牌已锁定'],
+      warnings: ['听牌后不能碰杠'],
     };
   }
 
@@ -228,8 +397,8 @@ function callAdvice(
       kind,
       judgement: 'not-recommended',
       score: -50,
-      reasons: [`need ${neededCopies} matching concealed tiles`],
-      warnings: ['not enough matching tiles'],
+      reasons: [`手中需要 ${neededCopies} 张同牌`],
+      warnings: ['手中同牌数量不足'],
     };
   }
 
@@ -237,10 +406,10 @@ function callAdvice(
   const remainingStanding = input.standing.length - Math.min(standingCopies, neededCopies);
   const warnings: string[] = [];
   if (remainingStanding <= 0) {
-    warnings.push('call would leave no standing tile for listening');
+    warnings.push('碰杠会耗尽最后一张立牌');
   }
   if (input.opponentsListening > 0) {
-    warnings.push('opponent listening risk');
+    warnings.push(`${input.opponentsListening} 家已听牌，有放炮风险`);
   }
   const score = 4 + (kind === 'kong' ? 2 : 0) + remainingStanding * 2 - warnings.length * 5;
   return {
@@ -248,11 +417,9 @@ function callAdvice(
     judgement: warnings.length > 0 ? 'not-recommended' : score >= 6 ? 'recommend' : 'optional',
     score,
     reasons: [
-      `${availableCopies} matching concealed tiles`,
-      remainingStanding > 0
-        ? 'standing tile remains available for listening'
-        : 'no standing tile remains after call',
-      kind === 'kong' ? 'kong adds tail draw and possible winner-only bonus' : 'pong jumps turn to caller',
+      `手中已有 ${availableCopies} 张同牌`,
+      remainingStanding > 0 ? '碰杠后仍保留立牌扣听' : '碰杠后无立牌，不能再听牌',
+      kind === 'kong' ? '杠后可补牌，杠分仅在胡牌时计' : '碰后轮到自己出牌',
     ],
     warnings,
   };
@@ -284,10 +451,8 @@ export function recommendSelfKongs(input: SelfKongRecommendationInput): SelfKong
         tileKey: key,
         judgement: wouldLeaveStanding ? 'optional' : 'not-recommended',
         reasons: [
-          'four concealed copies are available',
-          wouldLeaveStanding
-            ? 'standing tile remains available for listening'
-            : 'kong would consume the last standing tile',
+          '手中四张同牌可暗杠',
+          wouldLeaveStanding ? '暗杠后仍保留立牌' : '暗杠会耗尽最后一张立牌',
         ],
       };
     });
@@ -298,27 +463,32 @@ export function recommendSelfKongs(input: SelfKongRecommendationInput): SelfKong
       kind: 'added-kong',
       tileKey: tileKey(meld.tile),
       judgement: 'optional',
-      reasons: ['existing pong can be upgraded with the fourth tile', 'kong bonus scores only if user wins'],
+      reasons: ['已有碰牌可补杠', '杠分仅在胡牌时计'],
     }));
 
   return [...concealedKongs, ...addedKongs];
 }
 
-export function recommendAfterListening(input: AfterListeningRecommendationInput): AfterListeningRecommendation {
+export function recommendAfterListening(
+  input: AfterListeningRecommendationInput,
+): AfterListeningRecommendation {
   if (!input.hasDeclaredListening) {
-    return { mode: 'not-listening', reasons: ['player has not declared listening'] };
+    return { mode: 'not-listening', reasons: ['尚未听牌，继续按常规推荐'] };
   }
 
   if (input.drawnTile) {
     const key = tileKey(input.drawnTile);
     const counts = { ...input.lockedCounts, [key]: (input.lockedCounts[key] ?? 0) + 1 };
     if (isLegalLisiWin({ counts, melds: input.melds, hasDeclaredListening: true })) {
-      return { mode: 'self-draw-win', reasons: [`drawn ${key} completes a legal Lisi win`] };
+      return {
+        mode: 'self-draw-win',
+        reasons: [`摸进的 ${tileChineseName(input.drawnTile)} 已成合法胡牌，可自摸结算`],
+      };
     }
     return {
       mode: 'discard-drawn-tile',
       requiredDiscardKey: key,
-      reasons: [`locked listener must discard drawn ${key}`],
+      reasons: [`锁手后必须打出刚摸的 ${tileChineseName(input.drawnTile)}`],
     };
   }
 
@@ -326,9 +496,12 @@ export function recommendAfterListening(input: AfterListeningRecommendationInput
     const key = tileKey(input.discardedTile);
     const counts = { ...input.lockedCounts, [key]: (input.lockedCounts[key] ?? 0) + 1 };
     if (isLegalLisiWin({ counts, melds: input.melds, hasDeclaredListening: true })) {
-      return { mode: 'discard-win', reasons: [`discarded ${key} completes a legal Lisi win`] };
+      return {
+        mode: 'discard-win',
+        reasons: [`对手打出的 ${tileChineseName(input.discardedTile)} 可胡，可点炮结算`],
+      };
     }
   }
 
-  return { mode: 'waiting', reasons: ['waiting for a winning draw or discard'] };
+  return { mode: 'waiting', reasons: ['等待胡牌：自摸或对手点炮'] };
 }
